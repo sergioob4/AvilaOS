@@ -1,7 +1,18 @@
 package avilaos.estructuras;
 
+import java.util.concurrent.Semaphore;
+
 /**
- * 
+ * Cola genérica basada en nodos enlazados con soporte para exclusión mutua
+ * garantizada mediante un semáforo binario de Java.
+ *
+ * <p>Cumple con las restricciones de la cátedra:
+ * <ul>
+ *   <li>Sin colecciones de {@code java.util.*} (List, Queue, Stack, etc.).</li>
+ *   <li>Uso de {@link Semaphore} de Java para exclusión mutua entre hilos.</li>
+ * </ul>
+ * </p>
+ *
  * @param <T> el tipo de los elementos almacenados en la cola
  */
 public class Cola<T> {
@@ -15,7 +26,12 @@ public class Cola<T> {
     /** Cantidad actual de elementos en la cola. */
     private int tamano;
 
+    /** Semáforo binario de Java para exclusión mutua. */
+    private final Semaphore mutex;
+
+    // -------------------------------------------------------------------------
     // Constructor
+    // -------------------------------------------------------------------------
 
     /**
      * Crea una cola vacía.
@@ -24,47 +40,77 @@ public class Cola<T> {
         this.frente = null;
         this.fin = null;
         this.tamano = 0;
+        this.mutex = new Semaphore(1);
     }
 
-    // Operaciones principales
+    // -------------------------------------------------------------------------
+    // Sincronización
+    // -------------------------------------------------------------------------
 
-    public void encolar(T dato) {
-        Nodo<T> nuevoNodo = new Nodo<>(dato);
-
-        if (estaVacia()) {
-            // La cola estaba vacía: frente y fin apuntan al único nodo
-            frente = nuevoNodo;
-        } else {
-            // Enlazar el nuevo nodo al final de la cadena
-            fin.setSiguiente(nuevoNodo);
+    private void adquirir() {
+        try {
+            mutex.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+    }
 
-        fin = nuevoNodo;
-        tamano++;
+    private void liberar() {
+        mutex.release();
+    }
+
+    // -------------------------------------------------------------------------
+    // Operaciones principales
+    // -------------------------------------------------------------------------
+
+    /**
+     * Inserta un nuevo dato al final de la cola de manera segura para hilos.
+     *
+     * @param dato elemento a encolar
+     */
+    public void encolar(T dato) {
+        adquirir();
+        try {
+            Nodo<T> nuevoNodo = new Nodo<>(dato);
+
+            if (frente == null) {
+                frente = nuevoNodo;
+            } else {
+                fin.setSiguiente(nuevoNodo);
+            }
+
+            fin = nuevoNodo;
+            tamano++;
+        } finally {
+            liberar();
+        }
     }
 
     /**
-     * Elimina y devuelve el elemento del frente de la cola.
-     * 
+     * Elimina y devuelve el elemento del frente de la cola de manera segura para hilos.
+     *
      * @return el dato del elemento que estaba al frente
      * @throws ColaVaciaException si la cola no contiene elementos
      */
     public T desencolar() {
-        if (estaVacia()) {
-            throw new ColaVaciaException(
-                    "No se puede desencolar: la cola está vacía.");
+        adquirir();
+        try {
+            if (frente == null) {
+                throw new ColaVaciaException("No se puede desencolar: la cola está vacía.");
+            }
+
+            T datoExtraido = frente.getDato();
+            frente = frente.getSiguiente();
+
+            if (frente == null) {
+                fin = null;
+            }
+
+            tamano--;
+            return datoExtraido;
+        } finally {
+            liberar();
         }
-
-        T datoExtraido = frente.getDato();
-        frente = frente.getSiguiente();
-
-        // Si tras desencolar ya no hay elementos, fin también debe ser null
-        if (frente == null) {
-            fin = null;
-        }
-
-        tamano--;
-        return datoExtraido;
     }
 
     // -------------------------------------------------------------------------
@@ -77,7 +123,12 @@ public class Cola<T> {
      * @return {@code true} si la cola está vacía; {@code false} en caso contrario
      */
     public boolean estaVacia() {
-        return frente == null;
+        adquirir();
+        try {
+            return frente == null;
+        } finally {
+            liberar();
+        }
     }
 
     /**
@@ -86,57 +137,71 @@ public class Cola<T> {
      * @return número de elementos (≥ 0)
      */
     public int obtenerTamano() {
-        return tamano;
+        adquirir();
+        try {
+            return tamano;
+        } finally {
+            liberar();
+        }
     }
 
     /**
-     * Devuelve el elemento al frente de la cola <strong>sin eliminarlo</strong>.
+     * Devuelve el elemento al frente de la cola sin eliminarlo.
      *
      * @return el dato del frente
      * @throws ColaVaciaException si la cola no contiene elementos
      */
     public T obtenerFrente() {
-        if (estaVacia()) {
-            throw new ColaVaciaException(
-                    "No se puede consultar el frente: la cola está vacía.");
+        adquirir();
+        try {
+            if (frente == null) {
+                throw new ColaVaciaException("No se puede consultar el frente: la cola está vacía.");
+            }
+            return frente.getDato();
+        } finally {
+            liberar();
         }
-        return frente.getDato();
     }
 
     // -------------------------------------------------------------------------
     // Object
+    // -------------------------------------------------------------------------
 
     @Override
     public String toString() {
-        if (estaVacia()) {
-            return "Cola[vacía]";
-        }
-
-        StringBuilder sb = new StringBuilder("Cola[");
-        Nodo<T> actual = frente;
-
-        while (actual != null) {
-            sb.append(actual.getDato());
-            if (actual.getSiguiente() != null) {
-                sb.append(" -> ");
+        adquirir();
+        try {
+            if (frente == null) {
+                return "Cola[vacía]";
             }
-            actual = actual.getSiguiente();
-        }
 
-        sb.append("]");
-        return sb.toString();
+            StringBuilder sb = new StringBuilder("Cola[");
+            Nodo<T> actual = frente;
+
+            while (actual != null) {
+                sb.append(actual.getDato());
+                if (actual.getSiguiente() != null) {
+                    sb.append(" -> ");
+                }
+                actual = actual.getSiguiente();
+            }
+
+            sb.append("]");
+            return sb.toString();
+        } finally {
+            liberar();
+        }
     }
 
+    // -------------------------------------------------------------------------
     // Excepción interna
+    // -------------------------------------------------------------------------
 
     /**
      * Excepción no verificada que se lanza al intentar operar sobre una cola vacía.
      */
     public static final class ColaVaciaException extends RuntimeException {
 
-        /**
-         * Crea la excepción con un mensaje descriptivo.
-         */
         public ColaVaciaException(String mensaje) {
             super(mensaje);
         }
