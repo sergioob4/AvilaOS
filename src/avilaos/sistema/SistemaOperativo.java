@@ -7,6 +7,7 @@ import avilaos.estructuras.ListaEnlazada;
 import avilaos.hardware.CPU;
 import avilaos.hardware.MemoriaPrincipal;
 import avilaos.interfaces.IPoliticaPlanificacion;
+import avilaos.planificacion.FabricaPoliticas;
 import avilaos.planificacion.PoliticaFCFS;
 import avilaos.proceso.Proceso;
 
@@ -375,6 +376,15 @@ public class SistemaOperativo {
             this.politica = nuevaPolitica;
             this.politica.ordenarCola(colaListos);
         }
+    }
+
+    /**
+     * Cambia la política de planificación a partir de su tipo enumerado.
+     *
+     * @param tipoPolitica enum de la nueva política
+     */
+    public synchronized void setPolitica(PoliticaPlanificacion tipoPolitica) {
+        setPolitica(FabricaPoliticas.crear(tipoPolitica));
     }
 
     public synchronized int getQuantum() {
