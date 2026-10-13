@@ -140,6 +140,49 @@ public class ListaEnlazada<T> {
     }
 
     /**
+     * Intercambia las posiciones de los elementos ubicados en los índices especificados
+     * de forma atómica y segura entre hilos.
+     *
+     * @param i índice del primer elemento
+     * @param j índice del segundo elemento
+     * @throws IndexOutOfBoundsException si alguno de los índices está fuera de rango
+     */
+    public void intercambiar(int i, int j) {
+        if (i == j) {
+            return;
+        }
+        adquirir();
+        try {
+            validarIndice(i);
+            validarIndice(j);
+
+            Nodo<T> nodoI = null;
+            Nodo<T> nodoJ = null;
+            Nodo<T> actual = cabeza;
+            int indiceActual = 0;
+
+            while (actual != null && (nodoI == null || nodoJ == null)) {
+                if (indiceActual == i) {
+                    nodoI = actual;
+                }
+                if (indiceActual == j) {
+                    nodoJ = actual;
+                }
+                actual = actual.getSiguiente();
+                indiceActual++;
+            }
+
+            if (nodoI != null && nodoJ != null) {
+                T temp = nodoI.getDato();
+                nodoI.setDato(nodoJ.getDato());
+                nodoJ.setDato(temp);
+            }
+        } finally {
+            liberar();
+        }
+    }
+
+    /**
      * Elimina el elemento en un índice específico y lo devuelve.
      *
      * @param indice posición del elemento a eliminar

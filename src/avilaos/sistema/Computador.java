@@ -1,5 +1,6 @@
 package avilaos.sistema;
 
+import avilaos.enums.PoliticaPlanificacion;
 import avilaos.hardware.CPU;
 import avilaos.hardware.MemoriaPrincipal;
 import avilaos.interfaces.IComponenteReloj;
@@ -86,6 +87,15 @@ public class Computador implements IComponenteReloj {
      */
     public void cambiarPolitica(IPoliticaPlanificacion nuevaPolitica) {
         so.setPolitica(nuevaPolitica);
+    }
+
+    /**
+     * Cambia la política de planificación a partir de su tipo enumerado.
+     *
+     * @param tipoPolitica enum de la política a aplicar
+     */
+    public void cambiarPolitica(PoliticaPlanificacion tipoPolitica) {
+        so.setPolitica(tipoPolitica);
     }
 
     /**
