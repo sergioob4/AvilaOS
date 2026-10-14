@@ -2,8 +2,9 @@
 
 **Universidad Metropolitana**  
 **Departamento de Gestión de Proyectos y Sistemas**  
-**Asignatura:** Sistemas Operativos (Trimestre 2627-1)  
-**Proyecto 1:** Diseño de un Sistema Operativo Distribuido — Procesos y sincronización con semáforos  
+**Asignatura:** Sistemas Operativos (Trimestre 2627-1)
+**Integrantes:** Sergio Barrios, Carlos Moreno, Adrián Rondón
+**Proyecto 1:** Diseño de un Sistema Operativo Distribuido — Procesos y sincronización con semáforos
 
 ---
 
