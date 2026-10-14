@@ -2,9 +2,13 @@ package avilaos;
 
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
+import avilaos.gui.VentanaPrincipal;
 import avilaos.proceso.Proceso;
 import avilaos.sistema.ClusterDistribuido;
 import avilaos.sistema.Computador;
+
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 
 /**
  * Punto de entrada principal para la aplicación ÁvilaOS.
@@ -25,6 +29,47 @@ import avilaos.sistema.Computador;
 public class Main {
 
     public static void main(String[] args) {
+        boolean modoConsola = false;
+        for (String arg : args) {
+            if ("--console".equalsIgnoreCase(arg) || "--cli".equalsIgnoreCase(arg)) {
+                modoConsola = true;
+                break;
+            }
+        }
+
+        if (modoConsola) {
+            ejecutarSimulacionConsola();
+        } else {
+            lanzarInterfazGrafica();
+        }
+    }
+
+    /**
+     * Inicia el simulador con la Interfaz Gráfica de Usuario (GUI) Swing.
+     */
+    public static void lanzarInterfazGrafica() {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ignored) {
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            int numComputadores = 2;
+            int ramMb = 2048;
+            ClusterDistribuido cluster = new ClusterDistribuido(numComputadores, ramMb);
+
+            VentanaPrincipal ventana = new VentanaPrincipal(cluster);
+            ventana.setVisible(true);
+
+            // Carga inicial de procesos para demostración inmediata
+            ventana.inyectarCargaPrueba();
+        });
+    }
+
+    /**
+     * Ejecuta la prueba de validación por consola (útil para scripts y CI/CD).
+     */
+    public static void ejecutarSimulacionConsola() {
         System.out.println("================================================================================");
         System.out.println("                      Á V I L A O S   -   S I M U L A D O R                     ");
         System.out.println("            Validación de Requerimientos 1, 2 y 3 (Planificación de CPU)       ");
