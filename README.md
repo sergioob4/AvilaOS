@@ -93,6 +93,9 @@ src/
     │   ├── Nodo.java                      # Nodo genérico para estructuras enlazadas
     │   ├── ListaEnlazada.java             # Lista simplemente enlazada con Semaphore(1) para mutex
     │   └── Cola.java                      # Cola FIFO thread-safe
+    ├── gui/                               # Interfaz gráfica de usuario en Java Swing
+    │   ├── PanelComputador.java           # Visualización de CPU, PC, prioridad, deadline y modo
+    │   └── VentanaPrincipal.java          # Dashboard del clúster con controles y ciclo global
     ├── hardware/                          # Componentes de hardware simulados
     │   ├── CPU.java                       # Procesador monohilo, registros PC y MAR, modos de CPU
     │   ├── MemoriaPrincipal.java          # RAM configurable y asignación de bloques
@@ -128,23 +131,46 @@ src/
 
 ## 🚀 Compilación y Ejecución
 
-### Desde Apache NetBeans
+Por defecto, el programa inicia directamente con la **Interfaz Gráfica de Usuario (GUI)** en Swing. No obstante, dispone de un modo de consola para pruebas rápidas y depuración.
+
+### 1. Desde Apache NetBeans
+
+#### Modo por Defecto (Interfaz Gráfica Swing):
 1. Abrir NetBeans y seleccionar **File > Open Project**.
 2. Navegar hasta la carpeta `AvilaOS` y presionar **Open Project**.
 3. Hacer clic derecho sobre el proyecto y seleccionar **Clean and Build**.
-4. Presionar **Run Project** (`F6`) o ejecutar directamente la clase `avilaos.Main`.
+4. Presionar **Run Project** (`F6`) o el botón verde de Play (▶). Se abrirá la ventana gráfica del simulador.
 
-### Desde la Línea de Comandos (PowerShell / Terminal)
+#### Modo Consola (Sin Interfaz Gráfica):
+Para ejecutar la simulación mostrando únicamente la salida detallada en la consola de NetBeans (*Output tab*):
+1. En el panel de **Projects**, hacer clic derecho sobre el proyecto **AvilaOS** y seleccionar **Properties** (o presionar `Alt + F7`).
+2. En el menú lateral izquierdo, hacer clic en la categoría **Run**.
+3. En el campo **Arguments**, escribir:
+   ```text
+   --console
+   ```
+   *(También se admite `--cli`).*
+4. Presionar **OK** para guardar los cambios.
+5. Presionar **Run Project** (`F6`). La simulación se ejecutará de inmediato por la pestaña de salida (*Output*) de NetBeans, mostrando los estados de la CPU, PC, colas y resumen ciclo a ciclo sin abrir ventanas.
+6. *(Para regresar al modo de Interfaz Gráfica, simplemente volver a **Properties > Run** y dejar vacío el campo **Arguments**).*
 
-Compilar todo el código fuente:
+---
+
+### 2. Desde la Línea de Comandos (PowerShell / Terminal)
+
+**Compilar todo el código fuente:**
 ```powershell
-# En la raíz del repositorio:
 javac -d build/classes (Get-ChildItem -Path src -Recurse -Filter *.java | ForEach-Object { $_.FullName })
 ```
 
-Ejecutar la simulación de prueba actual:
+**Ejecutar con Interfaz Gráfica (por defecto):**
 ```powershell
 java -cp build/classes avilaos.Main
+```
+
+**Ejecutar en Modo Consola (sin GUI):**
+```powershell
+java -cp build/classes avilaos.Main --console
 ```
 
 ---
