@@ -127,6 +127,9 @@ public class PCB {
     /** Ciclos de latencia pendientes por completar en acceso a buffer remoto. */
     private int ciclosLatenciaRedRestante;
 
+    /** Indica si la transmisión por red para el ítem actual ya culminó. */
+    private boolean latenciaRedCompletada;
+
     // -------------------------------------------------------------------------
     // Métricas para Evaluación de Eficiencia
     // -------------------------------------------------------------------------
@@ -388,6 +391,14 @@ public class PCB {
 
     public void setCiclosLatenciaRedRestante(int ciclosLatenciaRedRestante) {
         this.ciclosLatenciaRedRestante = ciclosLatenciaRedRestante;
+    }
+
+    public boolean isLatenciaRedCompletada() {
+        return latenciaRedCompletada;
+    }
+
+    public void setLatenciaRedCompletada(boolean latenciaRedCompletada) {
+        this.latenciaRedCompletada = latenciaRedCompletada;
     }
 
     public long getCicloCreacion() {

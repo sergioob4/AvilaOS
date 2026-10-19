@@ -3,6 +3,7 @@ package avilaos.sistema;
 import avilaos.enums.EstadoProceso;
 import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.PoliticaPlanificacion;
+import avilaos.enums.TipoProceso;
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.hardware.CPU;
 import avilaos.hardware.MemoriaPrincipal;
@@ -10,6 +11,7 @@ import avilaos.interfaces.IPoliticaPlanificacion;
 import avilaos.planificacion.FabricaPoliticas;
 import avilaos.planificacion.PoliticaFCFS;
 import avilaos.proceso.Proceso;
+import avilaos.sincronizacion.GestorSincronizacion;
 
 /**
  * Núcleo del Sistema Operativo de un computador en ÁvilaOS.
@@ -42,6 +44,9 @@ public class SistemaOperativo {
 
     /** Quantum configurado para políticas rotativas como Round Robin. */
     private int quantum;
+
+    /** Gestor de sincronización global para buffers y semáforos distribuidos. */
+    private GestorSincronizacion gestorSincronizacion;
 
     // -------------------------------------------------------------------------
     // Colas del Sistema Operativo (Estructuras propias de ÁvilaOS)
@@ -102,19 +107,32 @@ public class SistemaOperativo {
      * @param cicloActual ciclo global de la simulación
      */
     public synchronized void ejecutarCicloSO(long cicloActual) {
+        // 0. Si hay gestor de sincronización, actualizar procesos bloqueados por tiempo (latencia de red y E/S)
+        if (gestorSincronizacion != null) {
+            gestorSincronizacion.actualizarBloqueadosPorTiempo(this, cicloActual);
+        }
+
         // 1. Supervisar deadlines de todos los procesos activos en el computador
         supervisarDeadlines(cicloActual);
 
-        // 2. Verificar si el proceso en CPU terminó de ejecutar
+        // 2. Si el proceso en CPU es productor o consumidor, coordinar sincronización con su buffer
+        Proceso procesoCpu = cpu.getProcesoActual();
+        if (procesoCpu != null && gestorSincronizacion != null
+                && (procesoCpu.getPcb().getTipo() == TipoProceso.PRODUCTOR
+                || procesoCpu.getPcb().getTipo() == TipoProceso.CONSUMIDOR)) {
+            gestorSincronizacion.procesarCicloProductorConsumidor(procesoCpu, this, cicloActual);
+        }
+
+        // 3. Verificar si el proceso en CPU terminó de ejecutar
         verificarProcesoEnCpuTerminado(cicloActual);
 
-        // 3. Planificador a largo plazo: intentar admitir procesos de la cola de nuevos
+        // 4. Planificador a largo plazo: intentar admitir procesos de la cola de nuevos
         planificarLargoPlazo(cicloActual);
 
-        // 4. Planificador a corto plazo: despachar o evaluar desalojos en la CPU
+        // 5. Planificador a corto plazo: despachar o evaluar desalojos en la CPU
         planificarCortoPlazo(cicloActual);
 
-        // 5. Actualizar tiempos de espera en la cola de listos y bloqueados
+        // 6. Actualizar tiempos de espera en la cola de listos y bloqueados
         actualizarTiemposEspera();
     }
 
@@ -376,6 +394,14 @@ public class SistemaOperativo {
             this.politica = nuevaPolitica;
             this.politica.ordenarCola(colaListos);
         }
+    }
+
+    public GestorSincronizacion getGestorSincronizacion() {
+        return gestorSincronizacion;
+    }
+
+    public void setGestorSincronizacion(GestorSincronizacion gestorSincronizacion) {
+        this.gestorSincronizacion = gestorSincronizacion;
     }
 
     /**

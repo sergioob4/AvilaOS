@@ -3,6 +3,7 @@ package avilaos.sincronizacion;
 import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.TipoProceso;
 import avilaos.estructuras.ListaEnlazada;
+import avilaos.interfaces.IComponenteReloj;
 import avilaos.proceso.PCB;
 import avilaos.proceso.Proceso;
 import avilaos.sistema.ClusterDistribuido;
@@ -23,7 +24,7 @@ import avilaos.sistema.SistemaOperativo;
  * </ul>
  * </p>
  */
-public class GestorSincronizacion {
+public class GestorSincronizacion implements IComponenteReloj {
 
     /** Clúster distribuido al que pertenece este gestor. */
     private final ClusterDistribuido cluster;
@@ -147,7 +148,7 @@ public class GestorSincronizacion {
         // Verificación de Latencia de Red (Acceso Remoto)
         // ---------------------------------------------------------------------
         boolean esLocal = buffer.esAccesoLocal(so.getIdComputador());
-        if (!esLocal && cluster.getLatenciaRedCiclos() > 0) {
+        if (!esLocal && cluster.getLatenciaRedCiclos() > 0 && !pcb.isLatenciaRedCompletada()) {
             // Requiere transmisión por red hacia el computador anfitrión del buffer
             pcb.setCiclosLatenciaRedRestante(cluster.getLatenciaRedCiclos());
             so.bloquearProceso(proceso, MotivoBloqueo.LATENCIA_RED);
@@ -180,6 +181,7 @@ public class GestorSincronizacion {
 
             // Éxito en la producción: reiniciar acumulador para el próximo elemento
             pcb.setCiclosAcumuladosItem(0);
+            pcb.setLatenciaRedCompletada(false);
 
         } else if (pcb.getTipo() == TipoProceso.CONSUMIDOR) {
             ElementoBuffer item = buffer.consumir(proceso, so, cicloActual);
@@ -190,6 +192,7 @@ public class GestorSincronizacion {
 
             // Éxito en el consumo
             pcb.setCiclosAcumuladosItem(0);
+            pcb.setLatenciaRedCompletada(false);
         }
 
         // Comprobar si el proceso cumplió su cuota total de elementos requeridos
@@ -233,6 +236,7 @@ public class GestorSincronizacion {
 
                 if (latenciaRestante <= 0) {
                     // El paquete de red llegó al computador anfitrión; reingresa a LISTOS para operar
+                    pcb.setLatenciaRedCompletada(true);
                     so.desbloquearProceso(p, cicloActual);
                 }
             }
@@ -260,6 +264,11 @@ public class GestorSincronizacion {
                 b.registrarMuestraCiclo();
             }
         }
+    }
+
+    @Override
+    public synchronized void ejecutarCiclo(long cicloActual) {
+        muestrearOcupacionBuffers();
     }
 
     public ListaEnlazada<BufferAcotado> getBuffers() {

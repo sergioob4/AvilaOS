@@ -3,6 +3,7 @@ package avilaos.sistema;
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.hardware.RelojGlobal;
 import avilaos.proceso.Proceso;
+import avilaos.sincronizacion.GestorSincronizacion;
 
 /**
  * Representa el clúster distribuido de computadores en ÁvilaOS.
@@ -21,6 +22,9 @@ public class ClusterDistribuido {
     /** Latencia de red global (en ciclos de reloj) para accesos remotos a buffers. */
     private int latenciaRedCiclos;
 
+    /** Gestor de sincronización global para buffers y semáforos del clúster. */
+    private final GestorSincronizacion gestorSincronizacion;
+
     /**
      * Construye un clúster distribuido con una cantidad dada de computadores.
      *
@@ -35,9 +39,12 @@ public class ClusterDistribuido {
         this.relojGlobal = new RelojGlobal();
         this.computadores = new ListaEnlazada<>();
         this.latenciaRedCiclos = 2; // Valor por defecto
+        this.gestorSincronizacion = new GestorSincronizacion(this);
+        this.relojGlobal.registrarComponente(this.gestorSincronizacion);
 
         for (int i = 1; i <= cantidadComputadores; i++) {
             Computador comp = new Computador("C" + i, "Computador " + i, ramPorDefectoMb);
+            comp.getSo().setGestorSincronizacion(this.gestorSincronizacion);
             computadores.agregar(comp);
             relojGlobal.registrarComponente(comp);
         }
@@ -50,6 +57,7 @@ public class ClusterDistribuido {
      */
     public void agregarComputador(Computador computador) {
         if (computador != null && !computadores.contiene(computador)) {
+            computador.getSo().setGestorSincronizacion(this.gestorSincronizacion);
             computadores.agregar(computador);
             relojGlobal.registrarComponente(computador);
         }
@@ -119,4 +127,10 @@ public class ClusterDistribuido {
     public void setLatenciaRedCiclos(int latenciaRedCiclos) {
         this.latenciaRedCiclos = Math.max(0, latenciaRedCiclos);
     }
+
+    public GestorSincronizacion getGestorSincronizacion() {
+        return gestorSincronizacion;
+    }
 }
+
+
