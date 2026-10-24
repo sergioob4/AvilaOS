@@ -163,6 +163,26 @@ public class Cola<T> {
         }
     }
 
+    /**
+     * Convierte la cola en una ListaEnlazada para iteración o visualización segura.
+     *
+     * @return lista enlazada con los elementos en orden FIFO
+     */
+    public ListaEnlazada<T> aLista() {
+        adquirir();
+        try {
+            ListaEnlazada<T> lista = new ListaEnlazada<>();
+            Nodo<T> actual = frente;
+            while (actual != null) {
+                lista.agregar(actual.getDato());
+                actual = actual.getSiguiente();
+            }
+            return lista;
+        } finally {
+            liberar();
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Object
     // -------------------------------------------------------------------------

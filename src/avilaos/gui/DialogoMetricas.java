@@ -2,6 +2,7 @@ package avilaos.gui;
 
 import avilaos.hardware.CPU;
 import avilaos.proceso.Proceso;
+import avilaos.sincronizacion.BufferAcotado;
 import avilaos.sistema.ClusterDistribuido;
 import avilaos.sistema.Computador;
 import avilaos.sistema.SistemaOperativo;
@@ -81,9 +82,13 @@ public class DialogoMetricas extends JDialog {
 
         // 1. Resumen Global
         panelContenido.add(crearSeccionGlobal(ciclos));
-        panelContenido.add(Box.createVerticalStrut(16));
+        panelContenido.add(Box.createVerticalStrut(14));
 
-        // 2. Métricas por Computador
+        // 2. Métricas de Sincronización y Buffers Acotados (Requerimiento 4)
+        panelContenido.add(crearSeccionSincronizacion());
+        panelContenido.add(Box.createVerticalStrut(14));
+
+        // 3. Métricas por Computador
         JLabel lblNodos = new JLabel("Rendimiento Desglosado por Computador");
         lblNodos.setFont(new Font("Segoe UI", Font.BOLD, 14));
         lblNodos.setForeground(COLOR_TITULO);
@@ -263,6 +268,47 @@ public class DialogoMetricas extends JDialog {
 
         p.add(l, BorderLayout.WEST);
         p.add(v, BorderLayout.EAST);
+        return p;
+    }
+
+    private JPanel crearSeccionSincronizacion() {
+        JPanel p = new JPanel(new BorderLayout(10, 10));
+        p.setBackground(COLOR_CARD);
+        p.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(COLOR_BORDE, 1, true),
+                new EmptyBorder(14, 18, 14, 18)
+        ));
+        p.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblSec = new JLabel("Sincronización y Buffers Acotados (Requerimiento 4)");
+        lblSec.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblSec.setForeground(new Color(168, 85, 247));
+        p.add(lblSec, BorderLayout.NORTH);
+
+        int totalBuffers = cluster.getGestorSincronizacion().getCantidadBuffers();
+        int totalProd = 0;
+        int totalCons = 0;
+        double sumaOcupProm = 0;
+
+        for (int i = 0; i < totalBuffers; i++) {
+            BufferAcotado b = cluster.getGestorSincronizacion().getBuffers().obtener(i);
+            if (b != null) {
+                totalProd += b.getTotalProducidos();
+                totalCons += b.getTotalConsumidos();
+                sumaOcupProm += b.calcularOcupacionPromedio();
+            }
+        }
+        double ocupPromGlobal = totalBuffers > 0 ? (sumaOcupProm / totalBuffers) : 0.0;
+
+        JPanel grid = new JPanel(new GridLayout(1, 4, 10, 10));
+        grid.setOpaque(false);
+
+        grid.add(crearMetricaBox("Buffers en Clúster", String.valueOf(totalBuffers), new Color(168, 85, 247)));
+        grid.add(crearMetricaBox("Ítems Producidos", String.valueOf(totalProd), COLOR_VERDE));
+        grid.add(crearMetricaBox("Ítems Consumidos", String.valueOf(totalCons), COLOR_AZUL));
+        grid.add(crearMetricaBox("Ocupación Media", String.format("%.2f elem", ocupPromGlobal), COLOR_AMBAR));
+
+        p.add(grid, BorderLayout.CENTER);
         return p;
     }
 }

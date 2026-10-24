@@ -1,6 +1,7 @@
 package avilaos.gui;
 
 import avilaos.enums.EstadoProceso;
+import avilaos.enums.TipoProceso;
 import avilaos.proceso.PCB;
 
 import javax.swing.*;
@@ -101,6 +102,14 @@ public class DialogoDetallePCB extends JDialog {
         }
         panelCentro.add(crearFila("Estado Final:", resultado));
         panelCentro.add(crearFila("Tiempo Espera en Listos:", pcb.getTiempoEnEspera() + " ciclos"));
+
+        // Atributos de Sincronización (Requerimiento 4)
+        if (pcb.getIdBuffer() != null || pcb.getTipo() == TipoProceso.PRODUCTOR || pcb.getTipo() == TipoProceso.CONSUMIDOR) {
+            panelCentro.add(crearFila("Buffer Asociado:", pcb.getIdBuffer() != null ? pcb.getIdBuffer() : "Ninguno"));
+            panelCentro.add(crearFila("Progreso de Ítems:", pcb.getItemsProcesados() + " / " + pcb.getItemsRequeridos()));
+            panelCentro.add(crearFila("Ciclos por Ítem:", pcb.getCiclosPorItem() + " ciclos"));
+            panelCentro.add(crearFila("Latencia Red Restante:", pcb.getCiclosLatenciaRedRestante() + " ciclos"));
+        }
 
         JScrollPane scroll = new JScrollPane(panelCentro);
         scroll.setBorder(null);

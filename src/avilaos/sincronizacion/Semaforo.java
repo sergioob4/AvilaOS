@@ -170,8 +170,16 @@ public class Semaforo {
         return colaBloqueados.obtenerTamano();
     }
 
+    public synchronized int getCantidadEnEspera() {
+        return getCantidadBloqueados();
+    }
+
     public synchronized Cola<Proceso> getColaBloqueados() {
         return colaBloqueados;
+    }
+
+    public synchronized String getColaEspera() {
+        return colaBloqueados.toString();
     }
 
     public synchronized int getTotalBloqueos() {

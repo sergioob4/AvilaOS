@@ -644,8 +644,12 @@ public class PanelComputador extends JPanel {
             Proceso p = cola.obtener(i);
             if (p != null) {
                 PCB pcb = p.getPcb();
-                String txt = String.format("[%s] %s | Motivo: %s",
-                        pcb.getId(), pcb.getNombre(), pcb.getMotivoBloqueo());
+                String motivo = pcb.getMotivoBloqueo() != null ? pcb.getMotivoBloqueo().getEtiqueta() : "Desconocido";
+                if (pcb.getMotivoBloqueo() == avilaos.enums.MotivoBloqueo.LATENCIA_RED) {
+                    motivo = "Latencia Red (" + pcb.getCiclosLatenciaRedRestante() + "c)";
+                }
+                String txt = String.format("[%s] %s | %s",
+                        pcb.getId(), pcb.getNombre(), motivo);
                 modelBloqueados.addElement(new ProcesoItem(p, txt));
             }
         }

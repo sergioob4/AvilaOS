@@ -3,6 +3,7 @@ package avilaos.sincronizacion;
 import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.TipoSemaforo;
 import avilaos.estructuras.Cola;
+import avilaos.estructuras.ListaEnlazada;
 import avilaos.proceso.Proceso;
 import avilaos.sistema.SistemaOperativo;
 
@@ -289,11 +290,19 @@ public class BufferAcotado {
         return idComputadorAnfitrion;
     }
 
+    public String getComputadorAnfitrion() {
+        return idComputadorAnfitrion;
+    }
+
     public int getCapacidad() {
         return capacidad;
     }
 
     public int getMemoriaOcupadaMb() {
+        return memoriaOcupadaMb;
+    }
+
+    public int getMemoriaReservadaMb() {
         return memoriaOcupadaMb;
     }
 
@@ -303,6 +312,10 @@ public class BufferAcotado {
 
     public synchronized Cola<ElementoBuffer> getColaElementos() {
         return colaElementos;
+    }
+
+    public synchronized ListaEnlazada<ElementoBuffer> getElementos() {
+        return colaElementos.aLista();
     }
 
     public Semaforo getSemaforoMutex() {

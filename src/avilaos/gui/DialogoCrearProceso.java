@@ -34,6 +34,12 @@ public class DialogoCrearProceso extends JDialog {
     private JSpinner spinCiclosEntreIO;
     private JSpinner spinDuracionIO;
 
+    // Campos condicionales para Productor / Consumidor (Sincronización - Requerimiento 4)
+    private JPanel panelOpcionesSinc;
+    private JComboBox<String> comboBuffer;
+    private JSpinner spinCiclosPorItem;
+    private JSpinner spinItemsRequeridos;
+
     // Colores Dark Theme
     private static final Color COLOR_BG = new Color(21, 25, 32);
     private static final Color COLOR_CARD = new Color(32, 38, 48);
@@ -160,10 +166,58 @@ public class DialogoCrearProceso extends JDialog {
 
         panelForm.add(panelOpcionesIO);
 
+        // 9. Opciones para Productor / Consumidor (Sincronización - Requerimiento 4)
+        panelOpcionesSinc = new JPanel(new GridLayout(3, 2, 8, 8));
+        panelOpcionesSinc.setBackground(COLOR_CARD);
+        panelOpcionesSinc.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(COLOR_BORDE, 1, true),
+                new EmptyBorder(10, 12, 10, 12)
+        ));
+
+        JLabel lblBuf = new JLabel("Buffer Acotado:");
+        lblBuf.setForeground(COLOR_LABEL);
+        lblBuf.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        comboBuffer = new JComboBox<>();
+        int cantBuf = cluster.getGestorSincronizacion().getCantidadBuffers();
+        if (cantBuf == 0) {
+            comboBuffer.addItem("B1 (Buffer Principal @ C1)");
+        } else {
+            for (int b = 0; b < cantBuf; b++) {
+                avilaos.sincronizacion.BufferAcotado buf = cluster.getGestorSincronizacion().getBuffers().obtener(b);
+                if (buf != null) {
+                    comboBuffer.addItem(buf.getId() + " - " + buf.getNombre() + " (@" + buf.getIdComputadorAnfitrion() + ")");
+                }
+            }
+        }
+        estilizarCombo(comboBuffer);
+
+        JLabel lblCiclosItem = new JLabel("Ciclos por Ítem:");
+        lblCiclosItem.setForeground(COLOR_LABEL);
+        lblCiclosItem.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        spinCiclosPorItem = new JSpinner(new SpinnerNumberModel(2, 1, 50, 1));
+        estilizarSpinner(spinCiclosPorItem);
+
+        JLabel lblItemsReq = new JLabel("Ítems Requeridos:");
+        lblItemsReq.setForeground(COLOR_LABEL);
+        lblItemsReq.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        spinItemsRequeridos = new JSpinner(new SpinnerNumberModel(4, 1, 100, 1));
+        estilizarSpinner(spinItemsRequeridos);
+
+        panelOpcionesSinc.add(lblBuf);
+        panelOpcionesSinc.add(comboBuffer);
+        panelOpcionesSinc.add(lblCiclosItem);
+        panelOpcionesSinc.add(spinCiclosPorItem);
+        panelOpcionesSinc.add(lblItemsReq);
+        panelOpcionesSinc.add(spinItemsRequeridos);
+        panelOpcionesSinc.setVisible(false);
+
+        panelForm.add(panelOpcionesSinc);
+
         // Listener para mostrar/ocultar opciones según el tipo
         comboTipo.addActionListener(e -> {
             TipoProceso tipo = (TipoProceso) comboTipo.getSelectedItem();
             panelOpcionesIO.setVisible(tipo == TipoProceso.IO_BOUND);
+            panelOpcionesSinc.setVisible(tipo == TipoProceso.PRODUCTOR || tipo == TipoProceso.CONSUMIDOR);
             revalidate();
             repaint();
         });
@@ -245,6 +299,7 @@ public class DialogoCrearProceso extends JDialog {
                 proceso.getPcb().setCiclosEntreIO((int) spinCiclosEntreIO.getValue());
                 proceso.getPcb().setDuracionBloqueoIO((int) spinDuracionIO.getValue());
             }
+            configurarSincronizacion(proceso, tipo);
             cluster.asignarProcesoAutomatico(proceso);
             ventanaPrincipal.actualizarTodo();
             JOptionPane.showMessageDialog(this,
@@ -272,6 +327,7 @@ public class DialogoCrearProceso extends JDialog {
                 proceso.getPcb().setCiclosEntreIO((int) spinCiclosEntreIO.getValue());
                 proceso.getPcb().setDuracionBloqueoIO((int) spinDuracionIO.getValue());
             }
+            configurarSincronizacion(proceso, tipo);
             comp.admitirProceso(proceso, cicloActual);
             ventanaPrincipal.actualizarTodo();
             JOptionPane.showMessageDialog(this,
@@ -280,6 +336,29 @@ public class DialogoCrearProceso extends JDialog {
         }
 
         dispose();
+    }
+
+    private void configurarSincronizacion(Proceso proceso, TipoProceso tipo) {
+        if (tipo != TipoProceso.PRODUCTOR && tipo != TipoProceso.CONSUMIDOR) {
+            return;
+        }
+        String seleccion = (String) comboBuffer.getSelectedItem();
+        String idBuf = "B1";
+        if (seleccion != null) {
+            if (seleccion.contains(" - ")) {
+                idBuf = seleccion.substring(0, seleccion.indexOf(" - ")).trim();
+            } else if (seleccion.contains(" ")) {
+                idBuf = seleccion.substring(0, seleccion.indexOf(" ")).trim();
+            } else {
+                idBuf = seleccion.trim();
+            }
+        }
+        if (cluster.getGestorSincronizacion().buscarBuffer(idBuf) == null) {
+            cluster.getGestorSincronizacion().crearBuffer(idBuf, "Buffer Compartido " + idBuf, "C1", 3, 256);
+        }
+        proceso.getPcb().setIdBuffer(idBuf);
+        proceso.getPcb().setCiclosPorItem((int) spinCiclosPorItem.getValue());
+        proceso.getPcb().setItemsRequeridos((int) spinItemsRequeridos.getValue());
     }
 
     private void mostrarError(String mensaje) {
