@@ -5,6 +5,7 @@ import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.BufferAcotado;
 import avilaos.sistema.ClusterDistribuido;
 import avilaos.sistema.Computador;
+import avilaos.sistema.MetricasEquidad;
 import avilaos.sistema.SistemaOperativo;
 
 import javax.swing.*;
@@ -174,7 +175,9 @@ public class DialogoMetricas extends JDialog {
         double cpuPromedio = totalComp > 0 ? (sumaUsoCpu / totalComp) : 0.0;
         double tiempoRespPromedio = procesosConRespuesta > 0 ? ((double) sumaTiemposRespuesta / procesosConRespuesta) : 0.0;
 
-        JPanel grid = new JPanel(new GridLayout(2, 4, 10, 10));
+        MetricasEquidad.Resultado equidad = MetricasEquidad.calcular(cluster);
+
+        JPanel grid = new JPanel(new GridLayout(3, 3, 10, 10));
         grid.setOpaque(false);
 
         grid.add(crearMetricaBox("Throughput (x10 c)", String.format("%.2f proc/10c", throughput), COLOR_VERDE));
@@ -186,6 +189,8 @@ public class DialogoMetricas extends JDialog {
         grid.add(crearMetricaBox("Abortados por Deadline", String.valueOf(porDeadline), porDeadline > 0 ? COLOR_ROJO : COLOR_MUTED));
         grid.add(crearMetricaBox("Total Finalizados", String.valueOf(totalTerminados), COLOR_TITULO));
         grid.add(crearMetricaBox("Latencia Red", cluster.getLatenciaRedCiclos() + " ciclos", COLOR_MUTED));
+        grid.add(crearMetricaBox("Equidad (Jain, " + equidad.getProcesosMedidos() + " proc.)",
+                String.format("%.3f", equidad.getIndice()), colorEquidad(equidad.getIndice())));
 
         p.add(grid, BorderLayout.CENTER);
         return p;
@@ -217,7 +222,7 @@ public class DialogoMetricas extends JDialog {
         headerCard.add(lblUso, BorderLayout.EAST);
         card.add(headerCard, BorderLayout.NORTH);
 
-        JPanel subGrid = new JPanel(new GridLayout(4, 2, 8, 8));
+        JPanel subGrid = new JPanel(new GridLayout(5, 2, 8, 8));
         subGrid.setOpaque(false);
 
         subGrid.add(crearSubDato("Política:", so.getPolitica().getTipo().getCodigo()));
@@ -228,9 +233,16 @@ public class DialogoMetricas extends JDialog {
         subGrid.add(crearSubDato("Cola Bloqueados:", String.valueOf(so.getColaBloqueados().obtenerTamano())));
         subGrid.add(crearSubDato("Completados:", String.valueOf(so.getProcesosCompletadosExitosos())));
         subGrid.add(crearSubDato("Por Deadline:", String.valueOf(so.getProcesosTerminadosPorDeadline())));
+        MetricasEquidad.Resultado equidad = MetricasEquidad.calcular(comp);
+        subGrid.add(crearSubDato("Equidad (Jain):", String.format("%.3f", equidad.getIndice())));
+        subGrid.add(crearSubDato("Procesos medidos:", String.valueOf(equidad.getProcesosMedidos())));
 
         card.add(subGrid, BorderLayout.CENTER);
         return card;
+    }
+
+    private Color colorEquidad(double indice) {
+        return indice >= 0.8 ? COLOR_VERDE : (indice >= 0.5 ? COLOR_AMBAR : COLOR_ROJO);
     }
 
     private JPanel crearMetricaBox(String titulo, String valor, Color colorValor) {
