@@ -32,6 +32,24 @@ public class ClusterDistribuido {
      * @param ramPorDefectoMb memoria RAM en MB para cada computador
      */
     public ClusterDistribuido(int cantidadComputadores, int ramPorDefectoMb) {
+        this(ramUniforme(cantidadComputadores, ramPorDefectoMb));
+    }
+
+    private static int[] ramUniforme(int cantidad, int ramMb) {
+        int[] rams = new int[Math.max(0, cantidad)];
+        for (int i = 0; i < rams.length; i++) {
+            rams[i] = ramMb;
+        }
+        return rams;
+    }
+
+    /**
+     * Construye un clúster donde cada computador puede tener una RAM distinta.
+     *
+     * @param ramPorComputadorMb RAM en MB de cada computador (longitud = cantidad, mínimo 2)
+     */
+    public ClusterDistribuido(int[] ramPorComputadorMb) {
+        int cantidadComputadores = ramPorComputadorMb.length;
         if (cantidadComputadores < 2) {
             throw new IllegalArgumentException("El sistema debe simular como mínimo 2 computadores.");
         }
@@ -43,7 +61,7 @@ public class ClusterDistribuido {
         this.relojGlobal.registrarComponente(this.gestorSincronizacion);
 
         for (int i = 1; i <= cantidadComputadores; i++) {
-            Computador comp = new Computador("C" + i, "Computador " + i, ramPorDefectoMb);
+            Computador comp = new Computador("C" + i, "Computador " + i, ramPorComputadorMb[i - 1]);
             comp.getSo().setGestorSincronizacion(this.gestorSincronizacion);
             computadores.agregar(comp);
             relojGlobal.registrarComponente(comp);
