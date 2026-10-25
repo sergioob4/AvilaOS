@@ -144,17 +144,26 @@ public class BufferAcotado {
      */
     public synchronized ElementoBuffer producir(Proceso proceso, SistemaOperativo so,
                                                 String contenido, long cicloActual) {
+        // La fase se avanza ANTES de cada wait: si el proceso se bloquea, al despertar el
+        // semáforo ya le concedió ese wait y debe continuar con el siguiente paso.
+        int fase = proceso.getPcb().getFaseSemaforo();
+
         // Paso 1: wait(espacios) -> Si buffer lleno, se bloquea con SEMAFORO_VACIO
-        boolean tieneEspacio = semaforoEspacios.waitSemaforo(proceso, so);
-        if (!tieneEspacio) {
-            return null; // Proceso bloqueado esperando espacio
+        if (fase < 1) {
+            proceso.getPcb().setFaseSemaforo(1);
+            if (!semaforoEspacios.waitSemaforo(proceso, so)) {
+                return null; // Proceso bloqueado esperando espacio
+            }
         }
 
         // Paso 2: wait(mutex) -> Si alguien más está en la sección crítica, se bloquea con SEMAFORO_MUTEX
-        boolean tieneMutex = semaforoMutex.waitSemaforo(proceso, so);
-        if (!tieneMutex) {
-            return null;
+        if (fase < 2) {
+            proceso.getPcb().setFaseSemaforo(2);
+            if (!semaforoMutex.waitSemaforo(proceso, so)) {
+                return null;
+            }
         }
+        proceso.getPcb().setFaseSemaforo(0);
 
         // --- SECCIÓN CRÍTICA ---
         generadorIdElementos++;
@@ -194,17 +203,25 @@ public class BufferAcotado {
      * @return el {@link ElementoBuffer} consumido si tuvo éxito inmediato; {@code null} si el proceso fue bloqueado
      */
     public synchronized ElementoBuffer consumir(Proceso proceso, SistemaOperativo so, long cicloActual) {
+        // Ver producir(): la fase evita repetir un wait que el semáforo ya concedió al despertar.
+        int fase = proceso.getPcb().getFaseSemaforo();
+
         // Paso 1: wait(elementos) -> Si buffer vacío, se bloquea con SEMAFORO_LLENO
-        boolean hayElementos = semaforoElementos.waitSemaforo(proceso, so);
-        if (!hayElementos) {
-            return null; // Proceso bloqueado esperando que se produzca algo
+        if (fase < 1) {
+            proceso.getPcb().setFaseSemaforo(1);
+            if (!semaforoElementos.waitSemaforo(proceso, so)) {
+                return null; // Proceso bloqueado esperando que se produzca algo
+            }
         }
 
         // Paso 2: wait(mutex) -> Exclusión mutua
-        boolean tieneMutex = semaforoMutex.waitSemaforo(proceso, so);
-        if (!tieneMutex) {
-            return null;
+        if (fase < 2) {
+            proceso.getPcb().setFaseSemaforo(2);
+            if (!semaforoMutex.waitSemaforo(proceso, so)) {
+                return null;
+            }
         }
+        proceso.getPcb().setFaseSemaforo(0);
 
         // --- SECCIÓN CRÍTICA ---
         ElementoBuffer elementoExtraido = colaElementos.desencolar();

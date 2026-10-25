@@ -4,6 +4,7 @@ import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.TipoSemaforo;
 import avilaos.estructuras.Cola;
 import avilaos.proceso.Proceso;
+import avilaos.sistema.Computador;
 import avilaos.sistema.SistemaOperativo;
 
 /**
@@ -133,17 +134,49 @@ public class Semaforo {
     public synchronized Proceso signalSemaforo(SistemaOperativo so, long cicloActual) {
         valor++;
 
-        if (!colaBloqueados.estaVacia()) {
+        // Invariante: valor = valorInicial - adquiridos - esperando. Un proceso terminado (p. ej. por
+        // deadline) que seguía en la cola ya no va a usar el recurso: se descarta devolviendo su
+        // unidad (valor++) y se despierta al siguiente proceso vivo.
+        while (!colaBloqueados.estaVacia()) {
             Proceso procesoDespertado = colaBloqueados.desencolar();
-            if (so != null && procesoDespertado != null) {
-                so.desbloquearProceso(procesoDespertado, cicloActual);
-            } else if (procesoDespertado != null) {
+            if (procesoDespertado == null) {
+                continue;
+            }
+            if (procesoDespertado.estaTerminado()) {
+                valor++;
+                continue;
+            }
+            SistemaOperativo soDestino = resolverSoDelProceso(procesoDespertado, so);
+            if (soDestino != null) {
+                soDestino.desbloquearProceso(procesoDespertado, cicloActual);
+            } else {
                 procesoDespertado.pasarAListo(cicloActual);
             }
             return procesoDespertado;
         }
 
         return null;
+    }
+
+    /**
+     * El proceso a despertar puede vivir en otro computador que el que ejecuta el signal
+     * (acceso remoto al buffer): hay que devolverlo a la cola de su propio sistema operativo.
+     */
+    private SistemaOperativo resolverSoDelProceso(Proceso proceso, SistemaOperativo soSignal) {
+        if (soSignal == null) {
+            return null;
+        }
+        if (soSignal.getIdComputador().equalsIgnoreCase(proceso.getPcb().getComputadorAsignado())) {
+            return soSignal;
+        }
+        if (soSignal.getGestorSincronizacion() != null) {
+            Computador c = soSignal.getGestorSincronizacion().getCluster()
+                    .buscarPorId(proceso.getPcb().getComputadorAsignado());
+            if (c != null) {
+                return c.getSo();
+            }
+        }
+        return soSignal;
     }
 
     public String getId() {

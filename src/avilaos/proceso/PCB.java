@@ -130,6 +130,13 @@ public class PCB {
     /** Indica si la transmisión por red para el ítem actual ya culminó. */
     private boolean latenciaRedCompletada;
 
+    /**
+     * Paso del protocolo productor-consumidor ya alcanzado en la operación actual sobre el buffer
+     * (0 = ninguno, 1 = pasó el primer wait, 2 = ya pidió el mutex). Un proceso que despierta
+     * de una cola de semáforo continúa desde este paso y no repite el wait que lo bloqueó.
+     */
+    private int faseSemaforo;
+
     // -------------------------------------------------------------------------
     // Métricas para Evaluación de Eficiencia
     // -------------------------------------------------------------------------
@@ -391,6 +398,14 @@ public class PCB {
 
     public void setCiclosLatenciaRedRestante(int ciclosLatenciaRedRestante) {
         this.ciclosLatenciaRedRestante = ciclosLatenciaRedRestante;
+    }
+
+    public int getFaseSemaforo() {
+        return faseSemaforo;
+    }
+
+    public void setFaseSemaforo(int faseSemaforo) {
+        this.faseSemaforo = faseSemaforo;
     }
 
     public boolean isLatenciaRedCompletada() {
