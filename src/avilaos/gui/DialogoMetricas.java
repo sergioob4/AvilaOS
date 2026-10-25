@@ -6,6 +6,7 @@ import avilaos.sincronizacion.BufferAcotado;
 import avilaos.sistema.ClusterDistribuido;
 import avilaos.sistema.Computador;
 import avilaos.sistema.MetricasEquidad;
+import avilaos.sistema.MetricasSincronizacion;
 import avilaos.sistema.SistemaOperativo;
 
 import javax.swing.*;
@@ -297,30 +298,75 @@ public class DialogoMetricas extends JDialog {
         lblSec.setForeground(new Color(168, 85, 247));
         p.add(lblSec, BorderLayout.NORTH);
 
-        int totalBuffers = cluster.getGestorSincronizacion().getCantidadBuffers();
-        int totalProd = 0;
-        int totalCons = 0;
+        MetricasSincronizacion.Resultado m = MetricasSincronizacion.calcular(cluster);
+        int totalBuffers = m.getCantidadBuffers();
         double sumaOcupProm = 0;
-
         for (int i = 0; i < totalBuffers; i++) {
-            BufferAcotado b = cluster.getGestorSincronizacion().getBuffers().obtener(i);
-            if (b != null) {
-                totalProd += b.getTotalProducidos();
-                totalCons += b.getTotalConsumidos();
-                sumaOcupProm += b.calcularOcupacionPromedio();
-            }
+            sumaOcupProm += m.getBuffer(i).getBuffer().calcularOcupacionPromedio();
         }
         double ocupPromGlobal = totalBuffers > 0 ? (sumaOcupProm / totalBuffers) : 0.0;
 
-        JPanel grid = new JPanel(new GridLayout(1, 4, 10, 10));
+        JPanel grid = new JPanel(new GridLayout(1, 5, 10, 10));
         grid.setOpaque(false);
 
         grid.add(crearMetricaBox("Buffers en Clúster", String.valueOf(totalBuffers), new Color(168, 85, 247)));
-        grid.add(crearMetricaBox("Ítems Producidos", String.valueOf(totalProd), COLOR_VERDE));
-        grid.add(crearMetricaBox("Ítems Consumidos", String.valueOf(totalCons), COLOR_AZUL));
+        grid.add(crearMetricaBox("Ítems Producidos", String.valueOf(m.getTotalProducidos()), COLOR_VERDE));
+        grid.add(crearMetricaBox("Ítems Consumidos", String.valueOf(m.getTotalConsumidos()), COLOR_AZUL));
         grid.add(crearMetricaBox("Ocupación Media", String.format("%.2f elem", ocupPromGlobal), COLOR_AMBAR));
+        grid.add(crearMetricaBox("Bloqueo Semáf. Prom.",
+                String.format("%.1f ciclos", m.getPromedioBloqueadoSemaforos()), COLOR_ROJO));
 
-        p.add(grid, BorderLayout.CENTER);
+        JPanel centro = new JPanel(new BorderLayout(0, 10));
+        centro.setOpaque(false);
+        centro.add(grid, BorderLayout.NORTH);
+        centro.add(crearTablaBuffers(m), BorderLayout.CENTER);
+
+        p.add(centro, BorderLayout.CENTER);
         return p;
+    }
+
+    /** Tabla con producidos, consumidos y bloqueo promedio en semáforos de cada buffer. */
+    private JPanel crearTablaBuffers(MetricasSincronizacion.Resultado m) {
+        JPanel tabla = new JPanel(new GridLayout(0, 6, 8, 6));
+        tabla.setOpaque(false);
+
+        String[] cabeceras = {"Buffer", "Anfitrión", "Producidos", "Consumidos", "Prod./Cons. (procesos)", "Bloqueo prom. (ciclos)"};
+        for (String c : cabeceras) {
+            JLabel l = new JLabel(c);
+            l.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            l.setForeground(COLOR_MUTED);
+            tabla.add(l);
+        }
+
+        if (m.getCantidadBuffers() == 0) {
+            JLabel vacio = new JLabel("No hay buffers creados.");
+            vacio.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            vacio.setForeground(COLOR_MUTED);
+            JPanel contenedor = new JPanel(new BorderLayout(0, 6));
+            contenedor.setOpaque(false);
+            contenedor.add(tabla, BorderLayout.NORTH);
+            contenedor.add(vacio, BorderLayout.CENTER);
+            return contenedor;
+        }
+
+        for (int i = 0; i < m.getCantidadBuffers(); i++) {
+            MetricasSincronizacion.PorBuffer pb = m.getBuffer(i);
+            BufferAcotado b = pb.getBuffer();
+            String[] celdas = {
+                b.getId() + " (" + b.getCantidadElementos() + "/" + b.getCapacidad() + ")",
+                b.getIdComputadorAnfitrion(),
+                String.valueOf(pb.getProducidos()),
+                String.valueOf(pb.getConsumidos()),
+                pb.getProductores() + " / " + pb.getConsumidores(),
+                String.format("%.1f", pb.getPromedioBloqueadoSemaforos())
+            };
+            for (String c : celdas) {
+                JLabel l = new JLabel(c);
+                l.setFont(new Font("Consolas", Font.PLAIN, 12));
+                l.setForeground(Color.WHITE);
+                tabla.add(l);
+            }
+        }
+        return tabla;
     }
 }
