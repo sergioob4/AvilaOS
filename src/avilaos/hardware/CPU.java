@@ -53,6 +53,15 @@ public class CPU implements IComponenteReloj {
     /** Total general de ciclos de reloj procesados por esta CPU. */
     private long totalCiclosProcesados;
 
+    /** Capacidad máxima del historial de utilización (muestras más recientes). */
+    private static final int CAPACIDAD_HISTORIAL = 1000;
+
+    /** Buffer circular con el % de utilización acumulado tras cada ciclo. */
+    private final double[] historialUtilizacion = new double[CAPACIDAD_HISTORIAL];
+
+    /** Cantidad de muestras válidas en el historial (hasta {@link #CAPACIDAD_HISTORIAL}). */
+    private int muestrasHistorial;
+
     /**
      * Construye una nueva CPU para un computador.
      *
@@ -99,6 +108,37 @@ public class CPU implements IComponenteReloj {
             ciclosEnRafagaActual = 0;
             modoEjecucion = ModoEjecucion.SISTEMA_OPERATIVO;
         }
+
+        registrarMuestraUtilizacion();
+    }
+
+    /** Guarda la utilización acumulada de este ciclo en el buffer circular. */
+    private void registrarMuestraUtilizacion() {
+        historialUtilizacion[(int) ((totalCiclosProcesados - 1) % CAPACIDAD_HISTORIAL)] = getPorcentajeUtilizacion();
+        if (muestrasHistorial < CAPACIDAD_HISTORIAL) {
+            muestrasHistorial++;
+        }
+    }
+
+    /**
+     * Devuelve una copia ordenada (de la más antigua a la más reciente) del historial
+     * de utilización acumulada. La muestra {@code i} corresponde al ciclo
+     * {@link #getCicloInicialHistorial()} {@code + i}.
+     *
+     * @return utilización (0.0 a 100.0) por ciclo
+     */
+    public synchronized double[] getHistorialUtilizacion() {
+        double[] copia = new double[muestrasHistorial];
+        long primero = totalCiclosProcesados - muestrasHistorial;
+        for (int i = 0; i < muestrasHistorial; i++) {
+            copia[i] = historialUtilizacion[(int) ((primero + i) % CAPACIDAD_HISTORIAL)];
+        }
+        return copia;
+    }
+
+    /** Ciclo (contado desde 1 en esta CPU) al que corresponde la primera muestra del historial. */
+    public synchronized long getCicloInicialHistorial() {
+        return totalCiclosProcesados - muestrasHistorial + 1;
     }
 
     // -------------------------------------------------------------------------
