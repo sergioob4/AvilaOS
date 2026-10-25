@@ -2,9 +2,11 @@ package avilaos;
 
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
+import avilaos.gui.DialogoConfiguracionInicial;
 import avilaos.gui.VentanaPrincipal;
 import avilaos.proceso.Proceso;
 import avilaos.sistema.ClusterDistribuido;
+import avilaos.sistema.ConfiguracionInicial;
 import avilaos.sistema.Computador;
 
 import javax.swing.SwingUtilities;
@@ -54,15 +56,15 @@ public class Main {
         }
 
         SwingUtilities.invokeLater(() -> {
-            int numComputadores = 2;
-            int ramMb = 2048;
-            ClusterDistribuido cluster = new ClusterDistribuido(numComputadores, ramMb);
+            // Vista de configuración inicial: si el usuario cancela, no se inicia la simulación
+            ConfiguracionInicial config = new DialogoConfiguracionInicial(ConfiguracionInicial.porDefecto()).mostrar();
+            if (config == null) {
+                return;
+            }
 
+            ClusterDistribuido cluster = config.crearCluster();
             VentanaPrincipal ventana = new VentanaPrincipal(cluster);
             ventana.setVisible(true);
-
-            // Carga inicial de procesos para demostración inmediata
-            ventana.inyectarCargaPrueba();
         });
     }
 
