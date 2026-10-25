@@ -18,6 +18,8 @@ import java.awt.*;
  */
 public class DialogoCrearProceso extends JDialog {
 
+    private static final String SIN_BUFFERS = "(No hay buffers creados)";
+
     private final ClusterDistribuido cluster;
     private final VentanaPrincipal ventanaPrincipal;
 
@@ -180,7 +182,7 @@ public class DialogoCrearProceso extends JDialog {
         comboBuffer = new JComboBox<>();
         int cantBuf = cluster.getGestorSincronizacion().getCantidadBuffers();
         if (cantBuf == 0) {
-            comboBuffer.addItem("B1 (Buffer Principal @ C1)");
+            comboBuffer.addItem(SIN_BUFFERS);
         } else {
             for (int b = 0; b < cantBuf; b++) {
                 avilaos.sincronizacion.BufferAcotado buf = cluster.getGestorSincronizacion().getBuffers().obtener(b);
@@ -287,6 +289,11 @@ public class DialogoCrearProceso extends JDialog {
             }
         }
 
+        if ((tipo == TipoProceso.PRODUCTOR || tipo == TipoProceso.CONSUMIDOR) && idBufferSeleccionado() == null) {
+            mostrarError("No hay un buffer seleccionado. Cree uno con el botón 'Nuevo Buffer' de la ventana principal.");
+            return;
+        }
+
         // Determinar destino
         int seleccionComp = comboComputador.getSelectedIndex();
         long cicloActual = cluster.getRelojGlobal().getCicloActual();
@@ -338,25 +345,21 @@ public class DialogoCrearProceso extends JDialog {
         dispose();
     }
 
+    /** ID del buffer elegido en el combo, o {@code null} si no hay un buffer existente seleccionado. */
+    private String idBufferSeleccionado() {
+        String seleccion = (String) comboBuffer.getSelectedItem();
+        if (seleccion == null || SIN_BUFFERS.equals(seleccion) || !seleccion.contains(" - ")) {
+            return null;
+        }
+        String id = seleccion.substring(0, seleccion.indexOf(" - ")).trim();
+        return cluster.getGestorSincronizacion().buscarBuffer(id) != null ? id : null;
+    }
+
     private void configurarSincronizacion(Proceso proceso, TipoProceso tipo) {
         if (tipo != TipoProceso.PRODUCTOR && tipo != TipoProceso.CONSUMIDOR) {
             return;
         }
-        String seleccion = (String) comboBuffer.getSelectedItem();
-        String idBuf = "B1";
-        if (seleccion != null) {
-            if (seleccion.contains(" - ")) {
-                idBuf = seleccion.substring(0, seleccion.indexOf(" - ")).trim();
-            } else if (seleccion.contains(" ")) {
-                idBuf = seleccion.substring(0, seleccion.indexOf(" ")).trim();
-            } else {
-                idBuf = seleccion.trim();
-            }
-        }
-        if (cluster.getGestorSincronizacion().buscarBuffer(idBuf) == null) {
-            cluster.getGestorSincronizacion().crearBuffer(idBuf, "Buffer Compartido " + idBuf, "C1", 3, 256);
-        }
-        proceso.getPcb().setIdBuffer(idBuf);
+        proceso.getPcb().setIdBuffer(idBufferSeleccionado());
         proceso.getPcb().setCiclosPorItem((int) spinCiclosPorItem.getValue());
         proceso.getPcb().setItemsRequeridos((int) spinItemsRequeridos.getValue());
     }

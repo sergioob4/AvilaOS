@@ -44,6 +44,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
     private BotonEstilizado btnPausar;
     private BotonEstilizado btnAvanzarPaso;
     private BotonEstilizado btnNuevoProceso;
+    private BotonEstilizado btnNuevoBuffer;
     private BotonEstilizado btnMetricas;
     private BotonEstilizado btnGuardar;
     private BotonEstilizado btnCargar;
@@ -253,6 +254,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         panelAcciones.setOpaque(false);
 
         btnNuevoProceso = crearBoton("Nuevo Proceso", COLOR_CYAN);
+        btnNuevoBuffer = crearBoton("Nuevo Buffer", COLOR_AMBAR);
         btnMetricas = crearBoton("Metricas Cluster", COLOR_MORADO);
         btnGuardar = crearBoton("Guardar CSV", COLOR_GRIS_BOTON);
         btnCargar = crearBoton("Cargar CSV", COLOR_GRIS_BOTON);
@@ -268,6 +270,15 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             dlg.setVisible(true);
         });
 
+        btnNuevoBuffer.addActionListener(e -> {
+            DialogoCrearBuffer dlg = new DialogoCrearBuffer(this, cluster, () -> {
+                actualizarTodo();
+                agregarLogEvento("Buffer creado: " + cluster.getGestorSincronizacion().getBuffers()
+                        .obtener(cluster.getGestorSincronizacion().getCantidadBuffers() - 1), COLOR_AMBAR);
+            });
+            dlg.setVisible(true);
+        });
+
         btnGuardar.addActionListener(e -> guardarEscenarioCsv());
         btnCargar.addActionListener(e -> cargarEscenarioCsv());
 
@@ -277,6 +288,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         });
 
         panelAcciones.add(btnNuevoProceso);
+        panelAcciones.add(btnNuevoBuffer);
         panelAcciones.add(btnMetricas);
         panelAcciones.add(btnGuardar);
         panelAcciones.add(btnCargar);
