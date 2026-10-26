@@ -8,7 +8,7 @@
 
 ---
 
-## 📌 Descripción del Proyecto
+## Descripción del Proyecto
 
 **ÁvilaOS** es un simulador modular y concurrente que modela la operación y coordinación de un sistema operativo distribuido sobre un clúster de computadores homogéneos. 
 
@@ -19,7 +19,7 @@ El sistema recrea la interacción entre capas de hardware y software:
 
 ---
 
-## 🏗️ Arquitectura y Principios de Diseño
+## Arquitectura y Principios de Diseño
 
 El diseño de ÁvilaOS sigue un modelo por capas desacoplado y estrictamente orientado a objetos:
 
@@ -46,7 +46,7 @@ El diseño de ÁvilaOS sigue un modelo por capas desacoplado y estrictamente ori
 ```
 
 ### Reglas Críticas de Diseño
-1. **Estructuras de Datos Propias:** Conforme a la normativa del curso, está **terminantemente prohibido** el uso de colecciones nativas de Java (`java.util.ArrayList`, `Queue`, `Vector`, `Stack`, etc.). Todas las colas y listas se implementan sobre `ListaEnlazada<T>` y `Cola<T>` con punteros manuales.
+1. **Estructuras de Datos Propias:** Todas las colas y listas están implementadas de cero sobre `ListaEnlazada<T>` y `Cola<T>` con punteros manuales.
 2. **Concurrencia y Exclusión Mutua:** Las estructuras compartidas integran `java.util.concurrent.Semaphore` para garantizar seguridad entre hilos concurrentes.
 3. **Uso de Enumeraciones (`enum`):**
    * `EstadoProceso`: `NUEVO`, `LISTO`, `EJECUCION`, `BLOQUEADO`, `TERMINADO`.
@@ -62,67 +62,83 @@ El diseño de ÁvilaOS sigue un modelo por capas desacoplado y estrictamente ori
 
 ---
 
-## 🚦 Estado Actual del Proyecto
+## Estado Actual del Proyecto
 
-| Módulo / Requerimiento | Estado | Detalle de Implementación |
-| :--- | :---: | :--- |
-| **1. Arquitectura Distribuida** | 🟢 **Listo (Backend)** | `ClusterDistribuido`, `Computador`, `CPU`, `MemoriaPrincipal`, `RelojGlobal`, interfaces `IComponenteReloj`. |
-| **2. Modelo de Procesos & PCB** | 🟢 **Listo** | `PCB` completo (ID único global, registros PC/MAR, métricas, deadlines), ciclo de instrucción en `Proceso`. |
-| **3. Planificación de CPU** | 🟢 **Listo** | Algoritmos **FCFS**, **Round Robin** (quantum configurable), **Prioridades Apropiativas** y **EDF**. Ordenamiento manual de colas y cambio en caliente. |
-| **4. Sincronización (Prod-Cons)** | 🟡 **Pendiente** | Enums creados. Falta implementar la clase de Semáforo propio de ÁvilaOS, la clase `BufferAcotado`, la latencia de red y el ciclo paso a paso de producción/consumo. |
-| **5. Memoria Principal (RAM)** | 🟢 **Listo (Backend)** | Control de memoria total/usada/libre, planificación a largo plazo por admisión de RAM. Falta descontar la memoria ocupada por los buffers. |
-| **6. Interfaz Gráfica (GUI)** | 🔴 **Pendiente** | Requisito indispensable en NetBeans (Swing). Falta Vista 1 (configuración/creación) y Vista 2 (monitoreo del clúster, colas, PCB, buffers y log). |
-| **7. Persistencia (JSON/CSV)** | 🔴 **Pendiente** | Guardado y carga de configuración inicial de simulación (computadores, RAM, procesos, buffers, latencia). |
-| **8. Métricas y Gráficos** | 🟡 **Parcial** | Cálculos base de CPU y procesos listos. Falta métricas de equidad, tiempos de respuesta, productor-consumidor y gráfico en tiempo real con JFreeChart. |
+| Módulo / Requerimiento | Detalle de Implementación |
+| :--- | :--- |
+| **1. Arquitectura del sistema distribuido** | Clúster de al menos dos computadores de una misma clase, cada uno con CPU, RAM y SO; reloj global, hilos, semáforos de Java, enums e interfaces requeridas. |
+| **2. Procesos y PCB** | Estados requeridos, motivos de bloqueo e identificación global única. El PCB incluye contexto PC/MAR, computador, tipo, prioridad, memoria, deadline, tiempo restante y métricas; al vencer el deadline, el proceso termina. |
+| **3. Planificación** | FCFS, EDF, Round Robin con quantum configurable y prioridades apropiativas. La política y el quantum se pueden cambiar por computador durante la simulación; se implementa asignación manual o automática sin migración. |
+| **4. Sincronización productor-consumidor** | Semáforos propios de ÁvilaOS (mutex y conteo), buffers acotados con varios productores/consumidores, bloqueo y reanudación, ubicación anfitriona en RAM y latencia configurable para accesos remotos. |
+| **5. Memoria principal** | RAM configurable con admisión de procesos según disponibilidad, liberación al terminar y revisión de la cola de nuevos. La RAM del anfitrión también descuenta la reservada por cada buffer. |
+| **6. Interfaz gráfica y configuración** | Vistas Swing de configuración inicial y monitoreo: CPU, modo, PCB, colas y motivos de bloqueo, RAM, políticas y quantum. Permite crear procesos y buffers, controlar la simulación y consultar el ciclo, los semáforos, los elementos de los buffers y los logs. |
+| **7. Persistencia de escenarios** | **Parcial** | Hay exportación e importación CSV de parámetros globales y procesos básicos. Falta restaurar la configuración completa de computadores (cantidad, RAM, políticas y quantum) y guardar/cargar buffers (capacidad, anfitrión y memoria), además de todos los atributos específicos de procesos. |
+| **8. Métricas y gráficos** | **Parcial** | Se muestran métricas globales de throughput, uso de CPU, respuesta promedio, cumplimiento de deadlines y equidad; también métricas por buffer y un gráfico de utilización de todas las CPU. Falta completar throughput, respuesta promedio y tasa de cumplimiento de deadlines para cada computador. |
 
 ---
 
-## 📂 Estructura del Código Fuente
+## Estructura del Código Fuente
 
 ```text
 src/
 └── avilaos/
-    ├── Main.java                          # Clase principal de pruebas y demostración de planificación
-    ├── enums/                             # Enumeraciones obligatorias del sistema
-    │   ├── EstadoProceso.java             # Estados: Nuevo, Listo, Ejecución, Bloqueado, Terminado
-    │   ├── ModoEjecucion.java             # Modo Usuario / Sistema Operativo
-    │   ├── MotivoBloqueo.java             # Justificación del bloqueo (semáforos, red, E/S)
-    │   ├── PoliticaPlanificacion.java     # Políticas de scheduling disponibles
-    │   ├── TipoProceso.java               # CPU-bound, I/O-bound, Productor, Consumidor
-    │   └── TipoSemaforo.java              # Semáforos Mutex vs Conteo
-    ├── estructuras/                       # Estructuras de datos propias (sin java.util.*)
-    │   ├── Nodo.java                      # Nodo genérico para estructuras enlazadas
-    │   ├── ListaEnlazada.java             # Lista simplemente enlazada con Semaphore(1) para mutex
-    │   └── Cola.java                      # Cola FIFO thread-safe
-    ├── gui/                               # Interfaz gráfica de usuario en Java Swing
-    │   ├── PanelComputador.java           # Visualización de CPU, PC, prioridad, deadline y modo
-    │   └── VentanaPrincipal.java          # Dashboard del clúster con controles y ciclo global
+    ├── Main.java                          # Punto de entrada; inicia la GUI o el modo consola
+    ├── enums/                             # Estados, modos, políticas y tipos del sistema
+    │   ├── EstadoProceso.java             # Estados del ciclo de vida de un proceso
+    │   ├── ModoEjecucion.java             # Modo usuario o sistema operativo
+    │   ├── MotivoBloqueo.java             # Causas de bloqueo: semáforos, red y E/S
+    │   ├── PoliticaPlanificacion.java     # Políticas de planificación disponibles
+    │   ├── TipoProceso.java               # CPU-bound, I/O-bound, productor y consumidor
+    │   └── TipoSemaforo.java              # Semáforos binarios mutex y de conteo
+    ├── estructuras/                       # Estructuras enlazadas propias y colas
+    │   ├── Nodo.java                      # Nodo genérico
+    │   ├── ListaEnlazada.java             # Lista enlazada sincronizada
+    │   └── Cola.java                      # Cola FIFO basada en nodos propios
+    ├── gui/                               # Interfaz gráfica Swing y persistencia CSV
+    │   ├── DialogoConfiguracionInicial.java # Configuración inicial del clúster y el reloj
+    │   ├── DialogoCrearBuffer.java        # Creación de buffers y reserva de RAM
+    │   ├── DialogoCrearProceso.java       # Creación y asignación de procesos
+    │   ├── DialogoDetallePCB.java         # Consulta detallada de un PCB
+    │   ├── DialogoGraficoCPU.java         # Ventana del gráfico de utilización de CPU
+    │   ├── DialogoMetricas.java           # Métricas globales, por computador y buffer
+    │   ├── GestorPersistencia.java        # Exportación e importación de escenarios CSV
+    │   ├── GraficoUtilizacionCPU.java     # Gráfico de utilización de todas las CPU
+    │   ├── PanelComputador.java           # Monitor de CPU, RAM, política, PCB y colas
+    │   └── VentanaPrincipal.java          # Dashboard, controles, logs y ciclo global
     ├── hardware/                          # Componentes de hardware simulados
-    │   ├── CPU.java                       # Procesador monohilo, registros PC y MAR, modos de CPU
-    │   ├── MemoriaPrincipal.java          # RAM configurable y asignación de bloques
-    │   └── RelojGlobal.java               # Hilo del reloj global que sincroniza todo el clúster
-    ├── interfaces/                        # Interfaces obligatorias para desacoplamiento
-    │   ├── IComponenteReloj.java          # Contrato para responder al avance de cada ciclo
-    │   └── IPoliticaPlanificacion.java    # Contrato para algoritmos de planificación
-    ├── planificacion/                     # Implementación de los algoritmos de scheduling
-    │   ├── FabricaPoliticas.java          # Factory para conmutación dinámica
+    │   ├── CPU.java                       # CPU, registros PC/MAR y utilización
+    │   ├── MemoriaPrincipal.java          # RAM configurable y control de asignación
+    │   └── RelojGlobal.java               # Reloj compartido que avanza el clúster
+    ├── interfaces/                        # Contratos para componentes intercambiables
+    │   ├── IComponenteReloj.java          # Componente que reacciona a cada ciclo
+    │   └── IPoliticaPlanificacion.java    # Interfaz de las políticas de planificación
+    ├── planificacion/                     # Algoritmos de planificación de CPU
+    │   ├── FabricaPoliticas.java          # Creación de políticas a partir de su tipo
+    │   ├── PoliticaEDF.java               # Earliest Deadline First
     │   ├── PoliticaFCFS.java              # First-Come, First-Served
-    │   ├── PoliticaRoundRobin.java        # Round Robin con quantum dinámico
-    │   ├── PoliticaPrioridadesApropiativas.java # Desalojo por prioridad
-    │   └── PoliticaEDF.java               # Earliest Deadline First con ordenamiento manual
-    ├── proceso/                           # Representación y control de procesos
-    │   ├── GeneradorIdProceso.java        # Generación secuencial de IDs globales únicos
-    │   ├── PCB.java                       # Bloque de Control de Proceso (contexto completo)
-    │   └── Proceso.java                   # Hilo único de ejecución, incremento de PC y deadline
-    └── sistema/                           # Núcleo y distribución
-        ├── ClusterDistribuido.java        # Coordinador del clúster de nodos
-        ├── Computador.java                # Instancia reutilizable de nodo (CPU + RAM + SO)
-        └── SistemaOperativo.java          # Núcleo del SO: largo/corto plazo, colas y deadlines
+    │   ├── PoliticaPrioridadesApropiativas.java # Prioridades con desalojo
+    │   └── PoliticaRoundRobin.java        # Round Robin con quantum configurable
+    ├── proceso/                           # Modelo de procesos y su contexto
+    │   ├── GeneradorIdProceso.java        # Generación de identificadores únicos
+    │   ├── PCB.java                       # Estado, contexto, recursos y métricas del proceso
+    │   └── Proceso.java                   # Ciclo de ejecución y transiciones del proceso
+    ├── sincronizacion/                    # Productor-consumidor y buffers acotados
+    │   ├── BufferAcotado.java             # Buffer con semáforos mutex, espacios y elementos
+    │   ├── ElementoBuffer.java            # Elemento producido y consumido
+    │   ├── GestorSincronizacion.java      # Buffers, operaciones y latencia de red
+    │   └── Semaforo.java                  # Semáforo propio con cola de espera
+    └── sistema/                           # Clúster, computadores, SO y métricas
+        ├── ClusterDistribuido.java        # Coordinador del clúster, reloj y asignación
+        ├── Computador.java                # Nodo con CPU, RAM y sistema operativo
+        ├── ConfiguracionInicial.java      # Parámetros iniciales y creación del clúster
+        ├── MetricasEquidad.java           # Cálculo del índice de equidad de Jain
+        ├── MetricasSincronizacion.java    # Métricas de producción, consumo y bloqueos
+        └── SistemaOperativo.java          # Planificación, colas, memoria y deadlines
 ```
 
 ---
 
-## ⚙️ Requisitos del Entorno
+## Requisitos del Entorno
 
 * **Java Development Kit (JDK):** Versión 21 o superior (Validado con JDK 22).
 * **IDE Oficial:** Apache NetBeans (Requerimiento estricto de cátedra).
@@ -130,7 +146,7 @@ src/
 
 ---
 
-## 🚀 Compilación y Ejecución
+## Compilación y Ejecución
 
 Por defecto, el programa inicia directamente con la **Interfaz Gráfica de Usuario (GUI)** en Swing. No obstante, dispone de un modo de consola para pruebas rápidas y depuración.
 
@@ -176,11 +192,11 @@ java -cp build/classes avilaos.Main --console
 
 ---
 
-## 🌿 Estándares de Git y Flujo de Trabajo
+## Estándares de Git y Flujo de Trabajo
 
 Para cumplir con la rúbrica de desarrollo colaborativo de la cátedra:
 * **Rama Principal (`main`):** Código estable y probado para entregas.
 * **Rama de Integración (`develop`):** Integración continua de funcionalidades.
-* **Ramas por Funcionalidad (`feat/*`):** Ramas cortas para cada tarea (ej: `feat/buffer-semaforos`, `feat/gui-dashboard`, `feat/persistencia-json`).
+* **Ramas por Funcionalidad:** Ramas cortas para cada tarea (ej: `buffer-semaforos`, `interfaz`, `planificacion`, `feat\MetricasProductorConsumidor`).
 * **Commits Semánticos:** Mensajes claros y descriptivos (`feat:`, `fix:`, `refactor:`, `docs:`).
 * **Pull Requests & Issues:** Toda integración a `develop` o `main` debe respaldarse mediante un Pull Request con revisión y discusión de código, asociado a su respectivo Issue.
