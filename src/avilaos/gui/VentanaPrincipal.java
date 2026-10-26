@@ -275,8 +275,6 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         btnNuevoBuffer.addActionListener(e -> {
             DialogoCrearBuffer dlg = new DialogoCrearBuffer(this, cluster, () -> {
                 actualizarTodo();
-                agregarLogEvento("Buffer creado: " + cluster.getGestorSincronizacion().getBuffers()
-                        .obtener(cluster.getGestorSincronizacion().getCantidadBuffers() - 1), COLOR_AMBAR);
             });
             dlg.setVisible(true);
         });
@@ -580,7 +578,6 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         // Crear Buffer Acotado si aún no existe en el gestor de sincronización
         if (cluster.getGestorSincronizacion().getCantidadBuffers() == 0) {
             cluster.getGestorSincronizacion().crearBuffer("B1", "Buffer Central", c1.getId(), 3, 256);
-            agregarLogEvento("Buffer B1 creado en " + c1.getNombre() + " (Capacidad: 3, RAM: 256 MB)", COLOR_AMBAR);
         }
 
         // Procesos para C1 (Cálculo Matricial y Productor Local)
@@ -652,6 +649,34 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             }
             info.append("| Monitoreo Activo (ÁvilaOS)");
             lblInfoCluster.setText(info.toString());
+        }
+
+        drenarEventosSistema();
+    }
+
+    private void drenarEventosSistema() {
+        ListaEnlazada<String> eventos = cluster.drenarEventos();
+        int total = eventos.obtenerTamano();
+        for (int i = 0; i < total; i++) {
+            String evento = eventos.obtener(i);
+            if (evento == null) {
+                continue;
+            }
+
+            Color color = COLOR_PRIMARIO;
+            if (evento.contains("deadline") || evento.contains("se bloquea")) {
+                color = COLOR_ROJO;
+            } else if (evento.contains("selecciona") || evento.contains("produce")
+                    || evento.contains("consume") || evento.contains("finaliza")) {
+                color = COLOR_VERDE;
+            } else if (evento.contains("remota") || evento.contains("Latencia")) {
+                color = COLOR_CYAN;
+            } else if (evento.contains("desbloquea") || evento.contains("despertado")) {
+                color = COLOR_AMBAR;
+            } else if (evento.contains("Buffer")) {
+                color = COLOR_MORADO;
+            }
+            agregarLogEvento(evento, color);
         }
     }
 
@@ -758,38 +783,6 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
         agregarLogCiclo(sb.toString(), COLOR_TEXTO_TITULO);
 
-        // Detectar y registrar eventos en este ciclo
-        for (int i = 0; i < totalComp; i++) {
-            Computador comp = cluster.getComputadores().obtener(i);
-            SistemaOperativo so = comp.getSo();
-
-            int terminados = so.getColaTerminados().obtenerTamano();
-            for (int j = 0; j < terminados; j++) {
-                Proceso p = so.getColaTerminados().obtener(j);
-                if (p != null && p.getPcb().getCicloTerminacion() == cicloActual) {
-                    if (p.getPcb().isTerminoPorDeadline()) {
-                        agregarLogEvento("[" + comp.getId() + "] Proceso " + p.getPcb().getId()
-                                + " (" + p.getPcb().getNombre() + ") ABORTADO por deadline expirado.", COLOR_ROJO);
-                    } else {
-                        agregarLogEvento("[" + comp.getId() + "] Proceso " + p.getPcb().getId()
-                                + " (" + p.getPcb().getNombre() + ") COMPLETADO exitosamente.", COLOR_VERDE);
-                    }
-                }
-            }
-
-            // Detectar bloqueos por latencia de red o semáforos recién ocurridos
-            int bloqueados = so.getColaBloqueados().obtenerTamano();
-            for (int b = 0; b < bloqueados; b++) {
-                Proceso pb = so.getColaBloqueados().obtener(b);
-                if (pb != null && pb.getPcb().getMotivoBloqueo() != null) {
-                    if (pb.getPcb().getMotivoBloqueo() == MotivoBloqueo.LATENCIA_RED
-                            && pb.getPcb().getCiclosLatenciaRedRestante() == cluster.getLatenciaRedCiclos()) {
-                        agregarLogEvento("[" + comp.getId() + "] " + pb.getId() + " (" + pb.getNombre()
-                                + ") en espera de LATENCIA DE RED (" + cluster.getLatenciaRedCiclos() + " ciclos)", COLOR_CYAN);
-                    }
-                }
-            }
-        }
     }
 
     private void registrarPCBsEnLog(long cicloActual) {

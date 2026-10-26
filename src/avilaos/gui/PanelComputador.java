@@ -187,8 +187,10 @@ public class PanelComputador extends JPanel {
         comboPolitica.addActionListener(e -> {
             if (actualizandoPoliticaInternamente) return;
             PoliticaPlanificacion seleccionada = (PoliticaPlanificacion) comboPolitica.getSelectedItem();
-            if (seleccionada != null) {
+            if (seleccionada != null && seleccionada != computador.getSo().getPolitica().getTipo()) {
                 computador.cambiarPolitica(seleccionada);
+                computador.getSo().registrarEvento(computador.getNombre() + " cambia su política de planificación a "
+                        + seleccionada.getCodigo() + ".");
                 spinQuantum.setEnabled(seleccionada == PoliticaPlanificacion.ROUND_ROBIN);
                 lblQuantum.setEnabled(seleccionada == PoliticaPlanificacion.ROUND_ROBIN);
             }
@@ -196,7 +198,11 @@ public class PanelComputador extends JPanel {
 
         spinQuantum.addChangeListener(e -> {
             int q = (int) spinQuantum.getValue();
+            int quantumAnterior = computador.getSo().getQuantum();
             computador.cambiarQuantum(q);
+            if (q != quantumAnterior) {
+                computador.getSo().registrarEvento(computador.getNombre() + " cambia el quantum a " + q + " ciclos.");
+            }
         });
 
         spinQuantum.setEnabled(computador.getSo().getPolitica().getTipo() == PoliticaPlanificacion.ROUND_ROBIN);

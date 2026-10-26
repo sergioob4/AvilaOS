@@ -109,6 +109,8 @@ public class Semaforo {
 
         if (so != null) {
             so.bloquearProceso(proceso, motivoBloqueo);
+            so.registrarEvento("Proceso " + proceso.getId() + " se bloquea en el semáforo '"
+                    + nombreSemaforo() + "' del buffer " + idBuffer() + ".");
         } else {
             proceso.bloquear(motivoBloqueo);
         }
@@ -152,6 +154,10 @@ public class Semaforo {
             } else {
                 procesoDespertado.pasarAListo(cicloActual);
             }
+            if (so != null) {
+                so.registrarEvento("Proceso " + procesoDespertado.getId() + " es despertado del semáforo '"
+                        + nombreSemaforo() + "' del buffer " + idBuffer() + ".");
+            }
             return procesoDespertado;
         }
 
@@ -177,6 +183,21 @@ public class Semaforo {
             }
         }
         return soSignal;
+    }
+
+    private String nombreSemaforo() {
+        if (motivoBloqueo == MotivoBloqueo.SEMAFORO_LLENO) {
+            return "lleno";
+        }
+        if (motivoBloqueo == MotivoBloqueo.SEMAFORO_VACIO) {
+            return "vacío";
+        }
+        return "mutex";
+    }
+
+    private String idBuffer() {
+        int separador = id.lastIndexOf('_');
+        return separador >= 0 && separador < id.length() - 1 ? id.substring(separador + 1) : id;
     }
 
     public String getId() {

@@ -1,6 +1,7 @@
 package avilaos.sistema;
 
 import avilaos.estructuras.ListaEnlazada;
+import avilaos.estructuras.Cola;
 import avilaos.hardware.RelojGlobal;
 import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.GestorSincronizacion;
@@ -24,6 +25,9 @@ public class ClusterDistribuido {
 
     /** Gestor de sincronización global para buffers y semáforos del clúster. */
     private final GestorSincronizacion gestorSincronizacion;
+
+    /** Eventos producidos por el núcleo y pendientes de presentar en la interfaz. */
+    private final Cola<String> eventos;
 
     /**
      * Construye un clúster distribuido con una cantidad dada de computadores.
@@ -56,6 +60,7 @@ public class ClusterDistribuido {
 
         this.relojGlobal = new RelojGlobal();
         this.computadores = new ListaEnlazada<>();
+        this.eventos = new Cola<>();
         this.latenciaRedCiclos = 2; // Valor por defecto
         this.gestorSincronizacion = new GestorSincronizacion(this);
         this.relojGlobal.registrarComponente(this.gestorSincronizacion);
@@ -149,6 +154,21 @@ public class ClusterDistribuido {
     public GestorSincronizacion getGestorSincronizacion() {
         return gestorSincronizacion;
     }
-}
 
+    /** Registra un evento del sistema junto con el ciclo global en que ocurrió. */
+    public synchronized void registrarEvento(String mensaje) {
+        if (mensaje != null && !mensaje.trim().isEmpty()) {
+            eventos.encolar("[Ciclo " + relojGlobal.getCicloActual() + "] " + mensaje);
+        }
+    }
+
+    /** Extrae en orden todos los eventos pendientes para que la interfaz los presente. */
+    public synchronized ListaEnlazada<String> drenarEventos() {
+        ListaEnlazada<String> pendientes = new ListaEnlazada<>();
+        while (!eventos.estaVacia()) {
+            pendientes.agregar(eventos.desencolar());
+        }
+        return pendientes;
+    }
+}
 

@@ -79,6 +79,8 @@ public class GestorSincronizacion implements IComponenteReloj {
 
         BufferAcotado buffer = new BufferAcotado(id, nombre, idComputadorAnfitrion, capacidad, memoriaMb);
         buffers.agregar(buffer);
+        cluster.registrarEvento("Buffer " + id + " creado en " + host.getNombre() + " (capacidad: "
+                + capacidad + ", RAM reservada: " + buffer.getMemoriaReservadaMb() + " MB).");
         return buffer;
     }
 
@@ -148,11 +150,15 @@ public class GestorSincronizacion implements IComponenteReloj {
         // Verificación de Latencia de Red (Acceso Remoto)
         // ---------------------------------------------------------------------
         boolean esLocal = buffer.esAccesoLocal(so.getIdComputador());
-        if (!esLocal && cluster.getLatenciaRedCiclos() > 0 && !pcb.isLatenciaRedCompletada()) {
-            // Requiere transmisión por red hacia el computador anfitrión del buffer
-            pcb.setCiclosLatenciaRedRestante(cluster.getLatenciaRedCiclos());
-            so.bloquearProceso(proceso, MotivoBloqueo.LATENCIA_RED);
-            return false; // Proceso desalojado de CPU por latencia de red
+        if (!esLocal && !pcb.isLatenciaRedCompletada()) {
+            cluster.registrarEvento("Proceso " + proceso.getId() + " accede al buffer " + buffer.getId()
+                    + " de forma remota desde " + so.getIdComputador() + ".");
+            if (cluster.getLatenciaRedCiclos() > 0) {
+                pcb.setCiclosLatenciaRedRestante(cluster.getLatenciaRedCiclos());
+                so.bloquearProceso(proceso, MotivoBloqueo.LATENCIA_RED);
+                return false; // Proceso desalojado de CPU por latencia de red
+            }
+            pcb.setLatenciaRedCompletada(true);
         }
 
         // ---------------------------------------------------------------------
@@ -182,6 +188,8 @@ public class GestorSincronizacion implements IComponenteReloj {
             // Éxito en la producción: reiniciar acumulador para el próximo elemento
             pcb.setCiclosAcumuladosItem(0);
             pcb.setLatenciaRedCompletada(false);
+            cluster.registrarEvento("Proceso " + proceso.getId() + " produce un elemento en el buffer "
+                    + buffer.getId() + ".");
 
         } else if (pcb.getTipo() == TipoProceso.CONSUMIDOR) {
             ElementoBuffer item = buffer.consumir(proceso, so, cicloActual);
@@ -193,6 +201,8 @@ public class GestorSincronizacion implements IComponenteReloj {
             // Éxito en el consumo
             pcb.setCiclosAcumuladosItem(0);
             pcb.setLatenciaRedCompletada(false);
+            cluster.registrarEvento("Proceso " + proceso.getId() + " consume un elemento del buffer "
+                    + buffer.getId() + ".");
         }
 
         // Comprobar si el proceso cumplió su cuota total de elementos requeridos
@@ -284,4 +294,3 @@ public class GestorSincronizacion implements IComponenteReloj {
     }
 
 }
-

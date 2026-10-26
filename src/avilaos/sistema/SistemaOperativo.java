@@ -205,8 +205,12 @@ public class SistemaOperativo {
 
         if (p.getPcb().isTerminoPorDeadline()) {
             procesosTerminadosPorDeadline++;
+            registrarEvento("Proceso " + p.getId() + " (" + p.getNombre()
+                    + ") termina por vencimiento de deadline en " + nombreComputador() + ".");
         } else {
             procesosCompletadosExitosos++;
+            registrarEvento("Proceso " + p.getId() + " (" + p.getNombre()
+                    + ") finaliza correctamente en " + nombreComputador() + ".");
         }
 
         // Al liberar memoria, revisar si algún proceso en cola de nuevos puede entrar
@@ -216,6 +220,8 @@ public class SistemaOperativo {
     private void finalizarProcesoSinMemoria(Proceso p, long cicloActual) {
         colaTerminados.agregar(p);
         procesosTerminadosPorDeadline++;
+        registrarEvento("Proceso " + p.getId() + " (" + p.getNombre()
+                + ") termina por vencimiento de deadline mientras esperaba memoria en " + nombreComputador() + ".");
     }
 
     // -------------------------------------------------------------------------
@@ -242,6 +248,8 @@ public class SistemaOperativo {
                 candidato.pasarAListo(cicloActual);
                 colaListos.agregar(candidato);
                 politica.ordenarCola(colaListos);
+                registrarEvento("Proceso " + candidato.getId() + " admitido en memoria y agregado a listos en "
+                        + nombreComputador() + ".");
             } else {
                 // Si el proceso al frente no cabe, espera hasta que se libere memoria
                 break;
@@ -267,6 +275,7 @@ public class SistemaOperativo {
                 Proceso siguiente = politica.seleccionarSiguiente(colaListos);
                 if (siguiente != null) {
                     cpu.cargarProceso(siguiente, cicloActual);
+                    registrarEvento(nombreComputador() + " selecciona el proceso " + siguiente.getId() + ".");
                 }
             }
             return;
@@ -285,6 +294,8 @@ public class SistemaOperativo {
             Proceso siguiente = politica.seleccionarSiguiente(colaListos);
             if (siguiente != null) {
                 cpu.cargarProceso(siguiente, cicloActual);
+                registrarEvento(nombreComputador() + " selecciona el proceso " + siguiente.getId()
+                        + " tras desalojar " + desalojado.getId() + ".");
             }
         }
     }
@@ -306,6 +317,8 @@ public class SistemaOperativo {
         proceso.getPcb().setCicloCreacion(cicloActual);
         proceso.getPcb().setComputadorAsignado(idComputador);
         colaNuevos.agregar(proceso);
+        registrarEvento("Proceso " + proceso.getId() + " (" + proceso.getNombre()
+                + ") ingresa a la cola de nuevos de " + nombreComputador() + ".");
         planificarLargoPlazo(cicloActual);
     }
 
@@ -328,6 +341,10 @@ public class SistemaOperativo {
 
         proceso.bloquear(motivo);
         colaBloqueados.agregar(proceso);
+        if (motivo != null && !motivo.esPorSemaforo()) {
+            registrarEvento("Proceso " + proceso.getId() + " se bloquea en " + motivo.getEtiqueta()
+                    + " en " + nombreComputador() + ".");
+        }
     }
 
     /**
@@ -342,9 +359,14 @@ public class SistemaOperativo {
         }
 
         if (colaBloqueados.eliminar(proceso)) {
+            MotivoBloqueo motivoAnterior = proceso.getPcb().getMotivoBloqueo();
             proceso.pasarAListo(cicloActual);
             colaListos.agregar(proceso);
             politica.ordenarCola(colaListos);
+            if (motivoAnterior == null || !motivoAnterior.esPorSemaforo()) {
+                registrarEvento("Proceso " + proceso.getId() + " se desbloquea y vuelve a listos en "
+                        + nombreComputador() + ".");
+            }
         }
     }
 
@@ -443,5 +465,22 @@ public class SistemaOperativo {
 
     public int getProcesosTerminadosPorDeadline() {
         return procesosTerminadosPorDeadline;
+    }
+
+    /** Publica un evento del núcleo en el registro global del clúster. */
+    public void registrarEvento(String mensaje) {
+        if (gestorSincronizacion != null) {
+            gestorSincronizacion.getCluster().registrarEvento(mensaje);
+        }
+    }
+
+    private String nombreComputador() {
+        if (gestorSincronizacion != null) {
+            Computador computador = gestorSincronizacion.getCluster().buscarPorId(idComputador);
+            if (computador != null) {
+                return computador.getNombre();
+            }
+        }
+        return idComputador;
     }
 }
