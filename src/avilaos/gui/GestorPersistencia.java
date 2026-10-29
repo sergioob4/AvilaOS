@@ -13,10 +13,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -135,13 +131,13 @@ public class GestorPersistencia {
             writer.write("# PROCESOS\n");
             writer.write("nombre,computador,tipo,prioridad,memoria,deadline,instrucciones,idBuffer,ciclosPorItem,itemsRequeridos,ciclosEntreIO,duracionBloqueoIO\n");
 
-            Set<String> procesosExportados = new HashSet<>();
+            ListaEnlazada<String> procesosExportados = new ListaEnlazada<>();
             for (int i = 0; i < totalComp; i++) {
                 Computador c = cluster.getComputadores().obtener(i);
 
                 // Proceso en CPU
                 Proceso enCpu = c.getCpu().getProcesoActual();
-                if (enCpu != null && !enCpu.estaTerminado() && procesosExportados.add(enCpu.getId())) {
+                if (enCpu != null && !enCpu.estaTerminado() && agregarSiNoExiste(procesosExportados, enCpu.getId())) {
                     escribirLineaProcesoCsv(writer, enCpu, c.getId());
                 }
 
@@ -149,7 +145,7 @@ public class GestorPersistencia {
                 int listos = c.getSo().getColaListos().obtenerTamano();
                 for (int j = 0; j < listos; j++) {
                     Proceso p = c.getSo().getColaListos().obtener(j);
-                    if (p != null && procesosExportados.add(p.getId())) {
+                    if (p != null && agregarSiNoExiste(procesosExportados, p.getId())) {
                         escribirLineaProcesoCsv(writer, p, c.getId());
                     }
                 }
@@ -158,7 +154,7 @@ public class GestorPersistencia {
                 int nuevos = c.getSo().getColaNuevos().obtenerTamano();
                 for (int j = 0; j < nuevos; j++) {
                     Proceso p = c.getSo().getColaNuevos().obtener(j);
-                    if (p != null && procesosExportados.add(p.getId())) {
+                    if (p != null && agregarSiNoExiste(procesosExportados, p.getId())) {
                         escribirLineaProcesoCsv(writer, p, c.getId());
                     }
                 }
@@ -167,7 +163,7 @@ public class GestorPersistencia {
                 int bloqueados = c.getSo().getColaBloqueados().obtenerTamano();
                 for (int j = 0; j < bloqueados; j++) {
                     Proceso p = c.getSo().getColaBloqueados().obtener(j);
-                    if (p != null && procesosExportados.add(p.getId())) {
+                    if (p != null && agregarSiNoExiste(procesosExportados, p.getId())) {
                         escribirLineaProcesoCsv(writer, p, c.getId());
                     }
                 }
@@ -353,24 +349,24 @@ public class GestorPersistencia {
 
         // 4. Procesos
         json.append("  \"procesos\": [\n");
-        List<String> lineasProcesos = new ArrayList<>();
-        Set<String> exportados = new HashSet<>();
+        ListaEnlazada<String> lineasProcesos = new ListaEnlazada<>();
+        ListaEnlazada<String> exportados = new ListaEnlazada<>();
 
         for (int i = 0; i < totalComp; i++) {
             Computador c = cluster.getComputadores().obtener(i);
 
             // Proceso en CPU
             Proceso enCpu = c.getCpu().getProcesoActual();
-            if (enCpu != null && !enCpu.estaTerminado() && exportados.add(enCpu.getId())) {
-                lineasProcesos.add(generarJsonProceso(enCpu, c.getId()));
+            if (enCpu != null && !enCpu.estaTerminado() && agregarSiNoExiste(exportados, enCpu.getId())) {
+                lineasProcesos.agregar(generarJsonProceso(enCpu, c.getId()));
             }
 
             // Cola de Listos
             int listos = c.getSo().getColaListos().obtenerTamano();
             for (int j = 0; j < listos; j++) {
                 Proceso p = c.getSo().getColaListos().obtener(j);
-                if (p != null && exportados.add(p.getId())) {
-                    lineasProcesos.add(generarJsonProceso(p, c.getId()));
+                if (p != null && agregarSiNoExiste(exportados, p.getId())) {
+                    lineasProcesos.agregar(generarJsonProceso(p, c.getId()));
                 }
             }
 
@@ -378,8 +374,8 @@ public class GestorPersistencia {
             int nuevos = c.getSo().getColaNuevos().obtenerTamano();
             for (int j = 0; j < nuevos; j++) {
                 Proceso p = c.getSo().getColaNuevos().obtener(j);
-                if (p != null && exportados.add(p.getId())) {
-                    lineasProcesos.add(generarJsonProceso(p, c.getId()));
+                if (p != null && agregarSiNoExiste(exportados, p.getId())) {
+                    lineasProcesos.agregar(generarJsonProceso(p, c.getId()));
                 }
             }
 
@@ -387,14 +383,15 @@ public class GestorPersistencia {
             int bloqueados = c.getSo().getColaBloqueados().obtenerTamano();
             for (int j = 0; j < bloqueados; j++) {
                 Proceso p = c.getSo().getColaBloqueados().obtener(j);
-                if (p != null && exportados.add(p.getId())) {
-                    lineasProcesos.add(generarJsonProceso(p, c.getId()));
+                if (p != null && agregarSiNoExiste(exportados, p.getId())) {
+                    lineasProcesos.agregar(generarJsonProceso(p, c.getId()));
                 }
             }
         }
 
-        for (int i = 0; i < lineasProcesos.size(); i++) {
-            json.append(lineasProcesos.get(i)).append(i < lineasProcesos.size() - 1 ? ",\n" : "\n");
+        int totalLineas = lineasProcesos.obtenerTamano();
+        for (int i = 0; i < totalLineas; i++) {
+            json.append(lineasProcesos.obtener(i)).append(i < totalLineas - 1 ? ",\n" : "\n");
         }
         json.append("  ]\n");
         json.append("}\n");
@@ -451,8 +448,9 @@ public class GestorPersistencia {
         }
 
         // 2. Computadores
-        List<String> compsJson = extraerObjetosArrayJson(json, "computadores");
-        for (String cj : compsJson) {
+        ListaEnlazada<String> compsJson = extraerObjetosArrayJson(json, "computadores");
+        for (int k = 0; k < compsJson.obtenerTamano(); k++) {
+            String cj = compsJson.obtener(k);
             String id = extraerValorJson(cj, "id");
             String nombre = extraerValorJson(cj, "nombre");
             String ramStr = extraerValorJson(cj, "ramTotalMb");
@@ -477,8 +475,9 @@ public class GestorPersistencia {
         }
 
         // 3. Buffers
-        List<String> buffersJson = extraerObjetosArrayJson(json, "buffers");
-        for (String bj : buffersJson) {
+        ListaEnlazada<String> buffersJson = extraerObjetosArrayJson(json, "buffers");
+        for (int k = 0; k < buffersJson.obtenerTamano(); k++) {
+            String bj = buffersJson.obtener(k);
             String id = extraerValorJson(bj, "id");
             String nombre = extraerValorJson(bj, "nombre");
             String host = extraerValorJson(bj, "computadorAnfitrion");
@@ -496,8 +495,9 @@ public class GestorPersistencia {
 
         // 4. Procesos
         int cargados = 0;
-        List<String> procesosJson = extraerObjetosArrayJson(json, "procesos");
-        for (String pj : procesosJson) {
+        ListaEnlazada<String> procesosJson = extraerObjetosArrayJson(json, "procesos");
+        for (int k = 0; k < procesosJson.obtenerTamano(); k++) {
+            String pj = procesosJson.obtener(k);
             String nombre = extraerValorJson(pj, "nombre");
             String idComp = extraerValorJson(pj, "computador");
             String tipoStr = extraerValorJson(pj, "tipo");
@@ -566,8 +566,21 @@ public class GestorPersistencia {
         return "";
     }
 
-    private static List<String> extraerObjetosArrayJson(String json, String nombreArray) {
-        List<String> objetos = new ArrayList<>();
+    /**
+     * Registra un ID en la lista de exportados si aún no estaba (equivalente a un conjunto).
+     *
+     * @return {@code true} si el ID era nuevo y se agregó
+     */
+    private static boolean agregarSiNoExiste(ListaEnlazada<String> lista, String id) {
+        if (lista.contiene(id)) {
+            return false;
+        }
+        lista.agregar(id);
+        return true;
+    }
+
+    private static ListaEnlazada<String> extraerObjetosArrayJson(String json, String nombreArray) {
+        ListaEnlazada<String> objetos = new ListaEnlazada<>();
         int idx = json.indexOf("\"" + nombreArray + "\"");
         if (idx == -1) return objetos;
         int inicioArray = json.indexOf("[", idx);
@@ -585,7 +598,7 @@ public class GestorPersistencia {
             } else if (c == '}') {
                 profundidad--;
                 if (profundidad == 0 && inicioObj != -1) {
-                    objetos.add(contenido.substring(inicioObj, i + 1));
+                    objetos.agregar(contenido.substring(inicioObj, i + 1));
                     inicioObj = -1;
                 }
             }
