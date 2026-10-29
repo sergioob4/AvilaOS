@@ -258,8 +258,8 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         btnNuevoBuffer = crearBoton("Nuevo Buffer", COLOR_AMBAR);
         btnMetricas = crearBoton("Metricas Cluster", COLOR_MORADO);
         btnGraficoCpu = crearBoton("Gráfico CPU", COLOR_PRIMARIO);
-        btnGuardar = crearBoton("Guardar CSV", COLOR_GRIS_BOTON);
-        btnCargar = crearBoton("Cargar CSV", COLOR_GRIS_BOTON);
+        btnGuardar = crearBoton("Guardar CSV/JSON", COLOR_GRIS_BOTON);
+        btnCargar = crearBoton("Cargar CSV/JSON", COLOR_GRIS_BOTON);
         btnCargarPrueba = crearBoton("Carga Demo", COLOR_GRIS_BOTON);
 
         btnNuevoProceso.addActionListener(e -> {
@@ -508,14 +508,15 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      */
     private void guardarEscenarioCsv() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Guardar Configuración de Simulación (CSV)");
+        chooser.setDialogTitle("Guardar Configuración de Simulación (CSV o JSON)");
         chooser.setSelectedFile(new File("escenario_cluster.csv"));
-        chooser.setFileFilter(new FileNameExtensionFilter("Archivos CSV (*.csv)", "csv"));
+        chooser.setFileFilter(new FileNameExtensionFilter("Archivos de Escenario (*.csv, *.json)", "csv", "json"));
 
         int res = chooser.showSaveDialog(this);
         if (res == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
-            if (!file.getName().toLowerCase().endsWith(".csv")) {
+            String nombre = file.getName().toLowerCase();
+            if (!nombre.endsWith(".csv") && !nombre.endsWith(".json")) {
                 file = new File(file.getAbsolutePath() + ".csv");
             }
             try {
@@ -533,12 +534,12 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
     }
 
     /**
-     * Carga procesos y configuración desde un archivo CSV.
+     * Carga procesos y configuración desde un archivo CSV o JSON.
      */
     private void cargarEscenarioCsv() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Cargar Configuración de Simulación (CSV)");
-        chooser.setFileFilter(new FileNameExtensionFilter("Archivos CSV (*.csv)", "csv"));
+        chooser.setDialogTitle("Cargar Configuración de Simulación (CSV o JSON)");
+        chooser.setFileFilter(new FileNameExtensionFilter("Archivos de Escenario (*.csv, *.json)", "csv", "json"));
 
         int res = chooser.showOpenDialog(this);
         if (res == JFileChooser.APPROVE_OPTION) {
