@@ -590,15 +590,20 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         c1.admitirProceso(p1, reloj.getCicloActual());
         c1.admitirProceso(p2, reloj.getCicloActual());
 
-        // Procesos para C2 (Indexador Web y Consumidor Remoto con latencia de red)
+        // Procesos para C2 (Indexador Web, Consumidor Remoto y Lector de Disco I/O Bound)
         Proceso p3 = new Proceso("Indexador Web", c2.getId(), TipoProceso.CPU_BOUND, 1, 512, 22, 7);
         Proceso p4 = new Proceso("Consumidor Remoto", c2.getId(), TipoProceso.CONSUMIDOR, 4, 256, 35, 8);
         p4.getPcb().setIdBuffer("B1");
         p4.getPcb().setCiclosPorItem(2);
         p4.getPcb().setItemsRequeridos(4);
 
+        Proceso p5 = new Proceso("Lector de Disco", c2.getId(), TipoProceso.IO_BOUND, 2, 256, 20, 6);
+        p5.getPcb().setCiclosEntreIO(3);
+        p5.getPcb().setDuracionBloqueoIO(2);
+
         c2.admitirProceso(p3, reloj.getCicloActual());
         c2.admitirProceso(p4, reloj.getCicloActual());
+        c2.admitirProceso(p5, reloj.getCicloActual());
 
         actualizarTodo();
     }

@@ -1,5 +1,6 @@
 package avilaos.sincronizacion;
 
+import avilaos.enums.ModoEjecucion;
 import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.TipoSemaforo;
 import avilaos.estructuras.Cola;
@@ -97,8 +98,17 @@ public class Semaforo {
             throw new IllegalArgumentException("El proceso no puede ser nulo en waitSemaforo.");
         }
 
+        // Syscall semWait: el procesador conmuta a modo kernel
+        if (so != null && so.getCpu() != null) {
+            so.getCpu().setModoEjecucion(ModoEjecucion.SISTEMA_OPERATIVO);
+        }
+
         if (valor > 0) {
             valor--;
+            // Si el proceso continúa ejecutando en CPU, retorna a modo usuario
+            if (so != null && so.getCpu() != null && so.getCpu().getProcesoActual() == proceso) {
+                so.getCpu().setModoEjecucion(ModoEjecucion.USUARIO);
+            }
             return true;
         }
 
@@ -134,7 +144,14 @@ public class Semaforo {
      * @return el proceso que fue despertado, o {@code null} si no había nadie en espera
      */
     public synchronized Proceso signalSemaforo(SistemaOperativo so, long cicloActual) {
+        // Syscall semSignal: el procesador conmuta a modo kernel
+        if (so != null && so.getCpu() != null) {
+            so.getCpu().setModoEjecucion(ModoEjecucion.SISTEMA_OPERATIVO);
+        }
+
         valor++;
+
+        Proceso procesoDespertadoFinal = null;
 
         // Invariante: valor = valorInicial - adquiridos - esperando. Un proceso terminado (p. ej. por
         // deadline) que seguía en la cola ya no va a usar el recurso: se descarta devolviendo su
@@ -158,10 +175,16 @@ public class Semaforo {
                 so.registrarEvento("Proceso " + procesoDespertado.getId() + " es despertado del semáforo '"
                         + nombreSemaforo() + "' del buffer " + idBuffer() + ".");
             }
-            return procesoDespertado;
+            procesoDespertadoFinal = procesoDespertado;
+            break;
         }
 
-        return null;
+        // Si el proceso que ejecutó el signal continúa en la CPU, retorna a modo usuario
+        if (so != null && so.getCpu() != null && so.getCpu().getProcesoActual() != null) {
+            so.getCpu().setModoEjecucion(ModoEjecucion.USUARIO);
+        }
+
+        return procesoDespertadoFinal;
     }
 
     /**

@@ -1,6 +1,7 @@
 package avilaos.sistema;
 
 import avilaos.enums.EstadoProceso;
+import avilaos.enums.ModoEjecucion;
 import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
@@ -10,6 +11,7 @@ import avilaos.hardware.MemoriaPrincipal;
 import avilaos.interfaces.IPoliticaPlanificacion;
 import avilaos.planificacion.FabricaPoliticas;
 import avilaos.planificacion.PoliticaFCFS;
+import avilaos.proceso.PCB;
 import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.GestorSincronizacion;
 
@@ -107,20 +109,27 @@ public class SistemaOperativo {
      * @param cicloActual ciclo global de la simulación
      */
     public synchronized void ejecutarCicloSO(long cicloActual) {
-        // 0. Si hay gestor de sincronización, actualizar procesos bloqueados por tiempo (latencia de red y E/S)
+        // 0. Actualizar procesos bloqueados por tiempo (latencia de red y E/S)
         if (gestorSincronizacion != null) {
             gestorSincronizacion.actualizarBloqueadosPorTiempo(this, cicloActual);
+        } else {
+            actualizarBloqueadosPorTiempoLocal(cicloActual);
         }
 
         // 1. Supervisar deadlines de todos los procesos activos en el computador
         supervisarDeadlines(cicloActual);
 
-        // 2. Si el proceso en CPU es productor o consumidor, coordinar sincronización con su buffer
+        // 2. Coordinación de procesos en CPU según su tipo (Productor, Consumidor o I/O Bound)
         Proceso procesoCpu = cpu.getProcesoActual();
-        if (procesoCpu != null && gestorSincronizacion != null
-                && (procesoCpu.getPcb().getTipo() == TipoProceso.PRODUCTOR
-                || procesoCpu.getPcb().getTipo() == TipoProceso.CONSUMIDOR)) {
-            gestorSincronizacion.procesarCicloProductorConsumidor(procesoCpu, this, cicloActual);
+        if (procesoCpu != null && !procesoCpu.estaTerminado()) {
+            if (procesoCpu.getPcb().getTipo() == TipoProceso.PRODUCTOR
+                    || procesoCpu.getPcb().getTipo() == TipoProceso.CONSUMIDOR) {
+                if (gestorSincronizacion != null) {
+                    gestorSincronizacion.procesarCicloProductorConsumidor(procesoCpu, this, cicloActual);
+                }
+            } else if (procesoCpu.getPcb().getTipo() == TipoProceso.IO_BOUND) {
+                procesarCicloIOBound(procesoCpu, cicloActual);
+            }
         }
 
         // 3. Verificar si el proceso en CPU terminó de ejecutar
@@ -134,6 +143,63 @@ public class SistemaOperativo {
 
         // 6. Actualizar tiempos de espera en la cola de listos y bloqueados
         actualizarTiemposEspera();
+    }
+
+    /**
+     * Procesa la lógica de ejecución para procesos I/O Bound en la CPU.
+     * Incrementa el contador de ciclos de CPU ejecutados desde la última operación de E/S.
+     * Al alcanzar el intervalo configurado (ciclosEntreIO), el proceso efectúa una syscall
+     * de E/S, la CPU conmuta a Modo SO, y el proceso es trasladado a la cola de BLOQUEADOS.
+     *
+     * @param proceso proceso I/O bound en ejecución
+     * @param cicloActual ciclo global del reloj
+     */
+    private void procesarCicloIOBound(Proceso proceso, long cicloActual) {
+        PCB pcb = proceso.getPcb();
+        int intervaloIO = pcb.getCiclosEntreIO();
+        int duracionIO = pcb.getDuracionBloqueoIO();
+
+        if (intervaloIO <= 0 || duracionIO <= 0) {
+            return;
+        }
+
+        pcb.incrementarCiclosCpuDesdeUltimoIO();
+
+        if (pcb.getCiclosCpuDesdeUltimoIO() >= intervaloIO) {
+            // Syscall de E/S: transición a modo kernel y bloqueo periférico
+            cpu.setModoEjecucion(ModoEjecucion.SISTEMA_OPERATIVO);
+            pcb.setCiclosCpuDesdeUltimoIO(0);
+            pcb.setCiclosBloqueadoIOActual(duracionIO);
+            bloquearProceso(proceso, MotivoBloqueo.ENTRADA_SALIDA);
+            registrarEvento("Proceso " + proceso.getId() + " (" + proceso.getNombre()
+                    + ") solicita E/S tras " + intervaloIO + " ciclos de CPU y pasa a BLOQUEADO ("
+                    + duracionIO + " ciclos) en " + nombreComputador() + ".");
+        }
+    }
+
+    /**
+     * Actualiza el tiempo restante de procesos bloqueados por E/S cuando no hay
+     * un gestor de sincronización global configurado (ej. pruebas unitarias aisladas).
+     *
+     * @param cicloActual ciclo global de simulación
+     */
+    private void actualizarBloqueadosPorTiempoLocal(long cicloActual) {
+        int total = colaBloqueados.obtenerTamano();
+        for (int i = total - 1; i >= 0; i--) {
+            Proceso p = colaBloqueados.obtener(i);
+            if (p == null) {
+                continue;
+            }
+            PCB pcb = p.getPcb();
+            if (pcb.getMotivoBloqueo() == MotivoBloqueo.ENTRADA_SALIDA) {
+                int ioRestante = pcb.getCiclosBloqueadoIOActual() - 1;
+                pcb.setCiclosBloqueadoIOActual(ioRestante);
+                if (ioRestante <= 0) {
+                    desbloquearProceso(p, cicloActual);
+                    registrarEvento("Proceso " + p.getId() + " completó su operación de E/S y pasa a LISTOS.");
+                }
+            }
+        }
     }
 
     // -------------------------------------------------------------------------

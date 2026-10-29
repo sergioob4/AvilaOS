@@ -1,5 +1,6 @@
 package avilaos.sincronizacion;
 
+import avilaos.enums.ModoEjecucion;
 import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.TipoSemaforo;
 import avilaos.estructuras.Cola;
@@ -166,6 +167,9 @@ public class BufferAcotado {
         proceso.getPcb().setFaseSemaforo(0);
 
         // --- SECCIÓN CRÍTICA ---
+        if (so != null && so.getCpu() != null) {
+            so.getCpu().setModoEjecucion(ModoEjecucion.SISTEMA_OPERATIVO);
+        }
         generadorIdElementos++;
         String idProductor = proceso.getId();
         String idCompOrigen = proceso.getPcb().getComputadorAsignado();
@@ -182,6 +186,10 @@ public class BufferAcotado {
 
         // Paso 4: signal(elementos) -> Notifica a consumidores en espera que hay un nuevo elemento
         semaforoElementos.signalSemaforo(so, cicloActual);
+
+        if (so != null && so.getCpu() != null && so.getCpu().getProcesoActual() == proceso) {
+            so.getCpu().setModoEjecucion(ModoEjecucion.USUARIO);
+        }
 
         return nuevoElemento;
     }
@@ -224,6 +232,9 @@ public class BufferAcotado {
         proceso.getPcb().setFaseSemaforo(0);
 
         // --- SECCIÓN CRÍTICA ---
+        if (so != null && so.getCpu() != null) {
+            so.getCpu().setModoEjecucion(ModoEjecucion.SISTEMA_OPERATIVO);
+        }
         ElementoBuffer elementoExtraido = colaElementos.desencolar();
         elementoExtraido.registrarConsumo(proceso.getId(), cicloActual);
         totalConsumidos++;
@@ -236,6 +247,10 @@ public class BufferAcotado {
 
         // Paso 4: signal(espacios) -> Notifica a productores en espera que se liberó un slot
         semaforoEspacios.signalSemaforo(so, cicloActual);
+
+        if (so != null && so.getCpu() != null && so.getCpu().getProcesoActual() == proceso) {
+            so.getCpu().setModoEjecucion(ModoEjecucion.USUARIO);
+        }
 
         return elementoExtraido;
     }

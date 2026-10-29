@@ -120,6 +120,9 @@ public class PCB {
     /** Contador de ciclos transcurridos en el bloqueo de E/S actual. */
     private int ciclosBloqueadoIOActual;
 
+    /** Ciclos de CPU ejecutados desde la última operación de E/S. */
+    private int ciclosCpuDesdeUltimoIO;
+
     // -------------------------------------------------------------------------
     // Parámetros para latencia de red en acceso remoto a buffers
     // -------------------------------------------------------------------------
@@ -390,6 +393,18 @@ public class PCB {
 
     public void setCiclosBloqueadoIOActual(int ciclosBloqueadoIOActual) {
         this.ciclosBloqueadoIOActual = ciclosBloqueadoIOActual;
+    }
+
+    public int getCiclosCpuDesdeUltimoIO() {
+        return ciclosCpuDesdeUltimoIO;
+    }
+
+    public void setCiclosCpuDesdeUltimoIO(int ciclosCpuDesdeUltimoIO) {
+        this.ciclosCpuDesdeUltimoIO = ciclosCpuDesdeUltimoIO;
+    }
+
+    public void incrementarCiclosCpuDesdeUltimoIO() {
+        this.ciclosCpuDesdeUltimoIO++;
     }
 
     public int getCiclosLatenciaRedRestante() {
