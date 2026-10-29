@@ -49,8 +49,8 @@ public class DialogoMetricas extends JDialog {
     }
 
     private void inicializarUI() {
-        setSize(820, 660);
-        setMinimumSize(new Dimension(680, 520));
+        setSize(860, 700);
+        setMinimumSize(new Dimension(720, 560));
         setLocationRelativeTo(getParent());
         getContentPane().setBackground(COLOR_BG);
         setLayout(new BorderLayout());
@@ -223,20 +223,49 @@ public class DialogoMetricas extends JDialog {
         headerCard.add(lblUso, BorderLayout.EAST);
         card.add(headerCard, BorderLayout.NORTH);
 
-        JPanel subGrid = new JPanel(new GridLayout(5, 2, 8, 8));
+        // Métricas locales del computador (Sección 8)
+        int exitososLocal = so.getProcesosCompletadosExitosos();
+        int porDeadlineLocal = so.getProcesosTerminadosPorDeadline();
+        int totalTerminadosLocal = exitososLocal + porDeadlineLocal;
+        double tasaCumplimientoLocal = totalTerminadosLocal > 0 ? ((double) exitososLocal / totalTerminadosLocal) * 100.0 : 100.0;
+        double throughputLocal = ciclos > 0 ? ((double) exitososLocal / ciclos) * 10.0 : 0.0;
+
+        long sumaTiemposRespuestaLocal = 0;
+        int procesosConRespuestaLocal = 0;
+        int termLocal = so.getColaTerminados().obtenerTamano();
+        for (int t = 0; t < termLocal; t++) {
+            Proceso proc = so.getColaTerminados().obtener(t);
+            if (proc != null && proc.getPcb().getCicloPrimeraEjecucion() >= 0) {
+                long tr = proc.getPcb().getCicloPrimeraEjecucion() - proc.getPcb().getCicloCreacion();
+                if (tr >= 0) {
+                    sumaTiemposRespuestaLocal += tr;
+                    procesosConRespuestaLocal++;
+                }
+            }
+        }
+        double tiempoRespPromedioLocal = procesosConRespuestaLocal > 0
+                ? ((double) sumaTiemposRespuestaLocal / procesosConRespuestaLocal)
+                : 0.0;
+
+        MetricasEquidad.Resultado equidad = MetricasEquidad.calcular(comp);
+
+        JPanel subGrid = new JPanel(new GridLayout(7, 2, 8, 8));
         subGrid.setOpaque(false);
 
         subGrid.add(crearSubDato("Política:", so.getPolitica().getTipo().getCodigo()));
         subGrid.add(crearSubDato("Quantum:", String.valueOf(so.getQuantum())));
         subGrid.add(crearSubDato("RAM Usada:", comp.getMemoria().getMemoriaUsada() + " MB"));
         subGrid.add(crearSubDato("RAM Libre:", comp.getMemoria().getMemoriaLibre() + " MB"));
+        subGrid.add(crearSubDato("Throughput:", String.format("%.2f proc/10c", throughputLocal)));
+        subGrid.add(crearSubDato("Tasa Deadlines:", String.format("%.1f%%", tasaCumplimientoLocal)));
+        subGrid.add(crearSubDato("Resp. Promedio:", String.format("%.1f ciclos", tiempoRespPromedioLocal)));
+        subGrid.add(crearSubDato("Equidad (Jain):", String.format("%.3f", equidad.getIndice())));
         subGrid.add(crearSubDato("Cola Listos:", String.valueOf(so.getColaListos().obtenerTamano())));
         subGrid.add(crearSubDato("Cola Bloqueados:", String.valueOf(so.getColaBloqueados().obtenerTamano())));
-        subGrid.add(crearSubDato("Completados:", String.valueOf(so.getProcesosCompletadosExitosos())));
-        subGrid.add(crearSubDato("Por Deadline:", String.valueOf(so.getProcesosTerminadosPorDeadline())));
-        MetricasEquidad.Resultado equidad = MetricasEquidad.calcular(comp);
-        subGrid.add(crearSubDato("Equidad (Jain):", String.format("%.3f", equidad.getIndice())));
+        subGrid.add(crearSubDato("Completados:", String.valueOf(exitososLocal)));
+        subGrid.add(crearSubDato("Por Deadline:", String.valueOf(porDeadlineLocal)));
         subGrid.add(crearSubDato("Procesos medidos:", String.valueOf(equidad.getProcesosMedidos())));
+        subGrid.add(crearSubDato("En CPU:", cpu.getProcesoActual() != null ? cpu.getProcesoActual().getId() : "Ninguno"));
 
         card.add(subGrid, BorderLayout.CENTER);
         return card;

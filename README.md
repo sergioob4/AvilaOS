@@ -72,8 +72,8 @@ El diseño de ÁvilaOS sigue un modelo por capas desacoplado y estrictamente ori
 | **4. Sincronización productor-consumidor** | Semáforos propios de ÁvilaOS (mutex y conteo), buffers acotados con varios productores/consumidores, bloqueo y reanudación, ubicación anfitriona en RAM y latencia configurable para accesos remotos. |
 | **5. Memoria principal** | RAM configurable con admisión de procesos según disponibilidad, liberación al terminar y revisión de la cola de nuevos. La RAM del anfitrión también descuenta la reservada por cada buffer. |
 | **6. Interfaz gráfica y configuración** | Vistas Swing de configuración inicial y monitoreo: CPU, modo, PCB, colas y motivos de bloqueo, RAM, políticas y quantum. Permite crear procesos y buffers, controlar la simulación y consultar el ciclo, los semáforos, los elementos de los buffers y los logs. |
-| **7. Persistencia de escenarios** | **Parcial** | Hay exportación e importación CSV de parámetros globales y procesos básicos. Falta restaurar la configuración completa de computadores (cantidad, RAM, políticas y quantum) y guardar/cargar buffers (capacidad, anfitrión y memoria), además de todos los atributos específicos de procesos. |
-| **8. Métricas y gráficos** | **Parcial** | Se muestran métricas globales de throughput, uso de CPU, respuesta promedio, cumplimiento de deadlines y equidad; también métricas por buffer y un gráfico de utilización de todas las CPU. Falta completar throughput, respuesta promedio y tasa de cumplimiento de deadlines para cada computador. |
+| **7. Persistencia de escenarios** | **Completo** | Serialización y deserialización bidireccional en formatos CSV y JSON: reloj, red, computadores con políticas y quantum, buffers con capacidad y reserva de RAM, y procesos con atributos completos (productores, consumidores e I/O bound). |
+| **8. Métricas y gráficos** | **Completo** | Métricas consolidadas del clúster y desglosadas por cada computador (throughput, uso de CPU, tiempo de respuesta promedio, tasa de cumplimiento de deadlines y equidad de Jain); métricas por buffer acotado y gráfico visual de utilización de CPU en tiempo real. |
 
 ---
 
