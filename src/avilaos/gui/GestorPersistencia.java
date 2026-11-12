@@ -436,6 +436,7 @@ public class GestorPersistencia {
             }
         }
         String json = sb.toString();
+        ValidadorJson.validarObjeto(json);
         validarCamposEscenarioJson(json);
         validarBuffersEscenarioJson(json, cluster);
 
