@@ -323,8 +323,8 @@ public class GestorPersistencia {
         for (int i = 0; i < totalComp; i++) {
             Computador c = cluster.getComputadores().obtener(i);
             json.append("    {\n");
-            json.append("      \"id\": \"").append(c.getId()).append("\",\n");
-            json.append("      \"nombre\": \"").append(c.getNombre()).append("\",\n");
+            json.append("      \"id\": \"").append(escaparJson(c.getId())).append("\",\n");
+            json.append("      \"nombre\": \"").append(escaparJson(c.getNombre())).append("\",\n");
             json.append("      \"ramTotalMb\": ").append(c.getMemoria().getCapacidadTotal()).append(",\n");
             json.append("      \"politica\": \"").append(c.getSo().getPolitica().getTipo().name()).append("\",\n");
             json.append("      \"quantum\": ").append(c.getSo().getQuantum()).append("\n");
@@ -338,9 +338,9 @@ public class GestorPersistencia {
         for (int i = 0; i < totalBuffers; i++) {
             BufferAcotado b = cluster.getGestorSincronizacion().getBuffers().obtener(i);
             json.append("    {\n");
-            json.append("      \"id\": \"").append(b.getId()).append("\",\n");
-            json.append("      \"nombre\": \"").append(b.getNombre()).append("\",\n");
-            json.append("      \"computadorAnfitrion\": \"").append(b.getIdComputadorAnfitrion()).append("\",\n");
+            json.append("      \"id\": \"").append(escaparJson(b.getId())).append("\",\n");
+            json.append("      \"nombre\": \"").append(escaparJson(b.getNombre())).append("\",\n");
+            json.append("      \"computadorAnfitrion\": \"").append(escaparJson(b.getIdComputadorAnfitrion())).append("\",\n");
             json.append("      \"capacidad\": ").append(b.getCapacidad()).append(",\n");
             json.append("      \"memoriaMb\": ").append(b.getMemoriaReservadaMb()).append("\n");
             json.append("    }").append(i < totalBuffers - 1 ? ",\n" : "\n");
@@ -404,14 +404,14 @@ public class GestorPersistencia {
     private static String generarJsonProceso(Proceso p, String idComp) {
         String idBuffer = p.getPcb().getIdBuffer() != null ? p.getPcb().getIdBuffer() : "";
         return "    {\n"
-                + "      \"nombre\": \"" + p.getPcb().getNombre() + "\",\n"
-                + "      \"computador\": \"" + idComp + "\",\n"
+                + "      \"nombre\": \"" + escaparJson(p.getPcb().getNombre()) + "\",\n"
+                + "      \"computador\": \"" + escaparJson(idComp) + "\",\n"
                 + "      \"tipo\": \"" + p.getPcb().getTipo().name() + "\",\n"
                 + "      \"prioridad\": " + p.getPcb().getPrioridad() + ",\n"
                 + "      \"memoria\": " + p.getPcb().getMemoriaAsignada() + ",\n"
                 + "      \"deadline\": " + p.getPcb().getDeadlineInicial() + ",\n"
                 + "      \"instrucciones\": " + p.getPcb().getTiempoEjecucionTotal() + ",\n"
-                + "      \"idBuffer\": \"" + idBuffer + "\",\n"
+                + "      \"idBuffer\": \"" + escaparJson(idBuffer) + "\",\n"
                 + "      \"ciclosPorItem\": " + p.getPcb().getCiclosPorItem() + ",\n"
                 + "      \"itemsRequeridos\": " + p.getPcb().getItemsRequeridos() + ",\n"
                 + "      \"ciclosEntreIO\": " + p.getPcb().getCiclosEntreIO() + ",\n"
@@ -553,13 +553,69 @@ public class GestorPersistencia {
     // Funciones Auxiliares de Parseo JSON sin Dependencias Externas
     // -------------------------------------------------------------------------
 
+    private static String escaparJson(String texto) {
+        StringBuilder resultado = new StringBuilder();
+        for (int i = 0; i < texto.length(); i++) {
+            char c = texto.charAt(i);
+            switch (c) {
+                case '"' -> resultado.append("\\\"");
+                case '\\' -> resultado.append("\\\\");
+                case '\b' -> resultado.append("\\b");
+                case '\f' -> resultado.append("\\f");
+                case '\n' -> resultado.append("\\n");
+                case '\r' -> resultado.append("\\r");
+                case '\t' -> resultado.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        resultado.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        resultado.append(c);
+                    }
+                }
+            }
+        }
+        return resultado.toString();
+    }
+
+    private static String desescaparJson(String texto) {
+        StringBuilder resultado = new StringBuilder();
+        for (int i = 0; i < texto.length(); i++) {
+            char c = texto.charAt(i);
+            if (c != '\\') {
+                resultado.append(c);
+                continue;
+            }
+            if (++i >= texto.length()) {
+                throw new IllegalArgumentException("Escape JSON incompleto");
+            }
+            char escape = texto.charAt(i);
+            switch (escape) {
+                case '"', '\\', '/' -> resultado.append(escape);
+                case 'b' -> resultado.append('\b');
+                case 'f' -> resultado.append('\f');
+                case 'n' -> resultado.append('\n');
+                case 'r' -> resultado.append('\r');
+                case 't' -> resultado.append('\t');
+                case 'u' -> {
+                    if (i + 4 >= texto.length()) {
+                        throw new IllegalArgumentException("Escape Unicode JSON incompleto");
+                    }
+                    resultado.append((char) Integer.parseInt(texto.substring(i + 1, i + 5), 16));
+                    i += 4;
+                }
+                default -> throw new IllegalArgumentException("Escape JSON inválido");
+            }
+        }
+        return resultado.toString();
+    }
+
     private static String extraerValorJson(String jsonObjeto, String clave) {
-        String patron = "\"" + clave + "\"\\s*:\\s*(\"[^\"]*\"|[^,\\}\\s]+)";
+        String patron = "\"" + Pattern.quote(clave) + "\"\\s*:\\s*(\"(?:\\\\.|[^\"\\\\])*\"|[^,\\}\\s]+)";
         Matcher m = Pattern.compile(patron).matcher(jsonObjeto);
         if (m.find()) {
             String val = m.group(1).trim();
             if (val.startsWith("\"") && val.endsWith("\"")) {
-                return val.substring(1, val.length() - 1);
+                return desescaparJson(val.substring(1, val.length() - 1));
             }
             return val;
         }
@@ -584,21 +640,32 @@ public class GestorPersistencia {
         int idx = json.indexOf("\"" + nombreArray + "\"");
         if (idx == -1) return objetos;
         int inicioArray = json.indexOf("[", idx);
-        int finArray = json.indexOf("]", inicioArray);
-        if (inicioArray == -1 || finArray == -1) return objetos;
+        if (inicioArray == -1) return objetos;
 
-        String contenido = json.substring(inicioArray + 1, finArray);
         int profundidad = 0;
         int inicioObj = -1;
-        for (int i = 0; i < contenido.length(); i++) {
-            char c = contenido.charAt(i);
+        boolean enCadena = false;
+        boolean escape = false;
+        for (int i = inicioArray + 1; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (enCadena) {
+                if (escape) escape = false;
+                else if (c == '\\') escape = true;
+                else if (c == '"') enCadena = false;
+                continue;
+            }
+            if (c == '"') {
+                enCadena = true;
+                continue;
+            }
+            if (c == ']' && profundidad == 0) break;
             if (c == '{') {
                 if (profundidad == 0) inicioObj = i;
                 profundidad++;
             } else if (c == '}') {
                 profundidad--;
                 if (profundidad == 0 && inicioObj != -1) {
-                    objetos.agregar(contenido.substring(inicioObj, i + 1));
+                    objetos.agregar(json.substring(inicioObj, i + 1));
                     inicioObj = -1;
                 }
             }
