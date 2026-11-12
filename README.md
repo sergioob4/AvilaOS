@@ -140,7 +140,7 @@ src/
 
 ## Requisitos del Entorno
 
-* **Java Development Kit (JDK):** Versión 21 o superior (Validado con JDK 22).
+* **Java Development Kit (JDK):** Versión 22 o superior, acorde con la configuración del proyecto en NetBeans.
 * **IDE Oficial:** Apache NetBeans (Requerimiento estricto de cátedra).
 * **Herramienta de Construcción:** Ant (`build.xml` integrado para NetBeans).
 
