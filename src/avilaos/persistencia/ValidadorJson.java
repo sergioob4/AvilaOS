@@ -1,6 +1,7 @@
-package avilaos.gui;
+package avilaos.persistencia;
 
 import java.io.IOException;
+import avilaos.estructuras.ListaEnlazada;
 
 /** Comprueba la sintaxis JSON antes de leer los datos de un escenario. */
 final class ValidadorJson {
@@ -20,6 +21,49 @@ final class ValidadorJson {
         if (parser.posicion != texto.length()) parser.error("contenido después del objeto raíz");
     }
 
+    /** Devuelve únicamente un miembro directo; nunca busca dentro de sus hijos. */
+    static String miembro(String texto, String clave) throws IOException {
+        ValidadorJson p = new ValidadorJson(texto);
+        p.espacios();
+        p.exigir('{');
+        p.espacios();
+        if (p.tomar('}')) return null;
+        do {
+            p.espacios();
+            int inicio = p.posicion;
+            p.cadena();
+            String nombre = GestorPersistencia.desescaparJson(texto.substring(inicio + 1, p.posicion - 1));
+            p.espacios();
+            p.exigir(':');
+            p.espacios();
+            inicio = p.posicion;
+            p.valor(0);
+            if (nombre.equals(clave)) return texto.substring(inicio, p.posicion);
+            p.espacios();
+            if (p.tomar('}')) return null;
+            p.exigir(',');
+        } while (true);
+    }
+
+    static ListaEnlazada<String> objetos(String texto) throws IOException {
+        ListaEnlazada<String> resultado = new ListaEnlazada<>();
+        ValidadorJson p = new ValidadorJson(texto);
+        p.espacios();
+        p.exigir('[');
+        p.espacios();
+        if (p.tomar(']')) return resultado;
+        do {
+            p.espacios();
+            if (p.actual() != '{') p.error("se esperaba un objeto en el arreglo");
+            int inicio = p.posicion;
+            p.valor(0);
+            resultado.agregar(texto.substring(inicio, p.posicion));
+            p.espacios();
+            if (p.tomar(']')) return resultado;
+            p.exigir(',');
+        } while (true);
+    }
+
     private void valor(int profundidad) throws IOException {
         if (profundidad > 128) error("anidamiento excesivo");
         espacios();
@@ -35,13 +79,18 @@ final class ValidadorJson {
     }
 
     private void objeto(int profundidad) throws IOException {
+        ListaEnlazada<String> claves = new ListaEnlazada<>();
         posicion++;
         espacios();
         if (tomar('}')) return;
         do {
             espacios();
             if (actual() != '"') error("se esperaba una clave");
+            int inicio = posicion;
             cadena();
+            String clave = GestorPersistencia.desescaparJson(texto.substring(inicio + 1, posicion - 1));
+            if (claves.contiene(clave)) error("clave duplicada: " + clave);
+            claves.agregar(clave);
             espacios();
             exigir(':');
             valor(profundidad);

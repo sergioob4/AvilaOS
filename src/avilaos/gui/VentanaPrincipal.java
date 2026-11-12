@@ -1,5 +1,7 @@
 package avilaos.gui;
 
+import avilaos.persistencia.GestorPersistencia;
+
 import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
@@ -195,7 +197,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         panelVelocidad.add(lblValorVelocidad);
 
         btnAvanzarPaso = crearBoton("Paso (+1)", COLOR_PRIMARIO);
-        btnIniciar = crearBoton("Iniciar", COLOR_VERDE);
+        btnIniciar = crearBoton("Iniciar / Reanudar", COLOR_VERDE);
         btnPausar = crearBoton("Pausar", COLOR_AMBAR);
 
         btnIniciar.addActionListener(e -> {

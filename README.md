@@ -101,10 +101,12 @@ src/
     │   ├── DialogoDetallePCB.java         # Consulta detallada de un PCB
     │   ├── DialogoGraficoCPU.java         # Ventana del gráfico de utilización de CPU
     │   ├── DialogoMetricas.java           # Métricas globales, por computador y buffer
-    │   ├── GestorPersistencia.java        # Exportación e importación de escenarios CSV
     │   ├── GraficoUtilizacionCPU.java     # Gráfico de utilización de todas las CPU
     │   ├── PanelComputador.java           # Monitor de CPU, RAM, política, PCB y colas
     │   └── VentanaPrincipal.java          # Dashboard, controles, logs y ciclo global
+    ├── persistencia/                      # Lectura, validación y escritura de escenarios
+    │   ├── GestorPersistencia.java
+    │   └── ValidadorJson.java
     ├── hardware/                          # Componentes de hardware simulados
     │   ├── CPU.java                       # CPU, registros PC/MAR y utilización
     │   ├── MemoriaPrincipal.java          # RAM configurable y control de asignación
@@ -140,7 +142,7 @@ src/
 
 ## Requisitos del Entorno
 
-* **Java Development Kit (JDK):** Versión 22 o superior, acorde con la configuración del proyecto en NetBeans.
+* **Java Development Kit (JDK):** Versión 21 o superior. El proyecto está configurado para compilar con Java 21; para cumplir el enunciado del Proyecto 2 se deberá usar una versión posterior a Java 21.
 * **IDE Oficial:** Apache NetBeans (Requerimiento estricto de cátedra).
 * **Herramienta de Construcción:** Ant (`build.xml` integrado para NetBeans).
 
@@ -193,6 +195,19 @@ java -cp build/classes avilaos.Main --console
 ---
 
 ## Estándares de Git y Flujo de Trabajo
+
+### Ejecución y carga de escenarios
+
+El botón **Iniciar / Reanudar** continúa la ejecución automática después de
+**Pausar** o **Paso (+1)**. El modo paso a paso es opcional.
+
+La importación JSON valida sintaxis, tipos, campos obligatorios, referencias y
+RAM de buffers antes de aplicar los datos. El reloj no avanza durante la
+validación y aplicación y conserva su estado de pausa o ejecución. La carga
+agrega procesos al escenario existente. El importador CSV conserva su
+comportamiento anterior; estas validaciones se refieren a JSON.
+
+### Trabajo colaborativo
 
 Para cumplir con la rúbrica de desarrollo colaborativo de la cátedra:
 * **Rama Principal (`main`):** Código estable y probado para entregas.
