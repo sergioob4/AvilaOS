@@ -437,6 +437,7 @@ public class GestorPersistencia {
         }
         String json = sb.toString();
         validarCamposEscenarioJson(json);
+        validarBuffersEscenarioJson(json, cluster);
 
         // 1. Configuración de reloj y red
         String duracionMs = extraerValorJson(json, "duracionCicloMs");
@@ -606,6 +607,58 @@ public class GestorPersistencia {
                 else Integer.parseInt(valor);
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException("campo '" + campo + "' no es un entero válido", e);
+            }
+        }
+    }
+
+    private static void validarBuffersEscenarioJson(String json, ClusterDistribuido cluster) throws IOException {
+        ListaEnlazada<String> computadores = extraerObjetosArrayJson(json, "computadores");
+        ListaEnlazada<String> buffers = extraerObjetosArrayJson(json, "buffers");
+        for (int i = 0; i < buffers.obtenerTamano(); i++) {
+            String buffer = buffers.obtener(i);
+            String id = extraerValorJson(buffer, "id");
+            String host = extraerValorJson(buffer, "computadorAnfitrion");
+            if (id.isBlank() || host.isBlank()) {
+                throw new IOException("Cada buffer debe tener un ID y un computador anfitrión.");
+            }
+            String memoriaStr = extraerValorJson(buffer, "memoriaMb");
+            int memoria = memoriaStr.isEmpty() ? 256 : Integer.parseInt(memoriaStr);
+            if (memoria < 0) {
+                throw new IOException("La memoria del buffer " + id + " no puede ser negativa.");
+            }
+            if (cluster.getGestorSincronizacion().buscarBuffer(id) != null) continue;
+
+            Computador existente = cluster.buscarPorId(host);
+            long libre = existente != null ? existente.getMemoria().getMemoriaLibre() : -1;
+            if (existente == null) {
+                for (int j = 0; j < computadores.obtenerTamano(); j++) {
+                    String computador = computadores.obtener(j);
+                    if (host.equalsIgnoreCase(extraerValorJson(computador, "id"))) {
+                        String ram = extraerValorJson(computador, "ramTotalMb");
+                        if (!ram.isEmpty()) libre = Integer.parseInt(ram);
+                        break;
+                    }
+                }
+            }
+            if (libre < 0) {
+                throw new IOException("No existe el computador anfitrión '" + host + "' del buffer " + id + ".");
+            }
+
+            long reservado = 0;
+            for (int j = 0; j < i; j++) {
+                String anterior = buffers.obtener(j);
+                String idAnterior = extraerValorJson(anterior, "id");
+                if (idAnterior.equalsIgnoreCase(id)) {
+                    throw new IOException("ID de buffer duplicado: " + id + ".");
+                }
+                if (host.equalsIgnoreCase(extraerValorJson(anterior, "computadorAnfitrion"))
+                        && cluster.getGestorSincronizacion().buscarBuffer(idAnterior) == null) {
+                    String memoriaAnterior = extraerValorJson(anterior, "memoriaMb");
+                    reservado += memoriaAnterior.isEmpty() ? 256 : Integer.parseInt(memoriaAnterior);
+                }
+            }
+            if (reservado + memoria > libre) {
+                throw new IOException("RAM insuficiente en " + host + " para el buffer " + id + ".");
             }
         }
     }
