@@ -436,6 +436,7 @@ public class GestorPersistencia {
             }
         }
         String json = sb.toString();
+        validarCamposEscenarioJson(json);
 
         // 1. Configuración de reloj y red
         String duracionMs = extraerValorJson(json, "duracionCicloMs");
@@ -552,6 +553,62 @@ public class GestorPersistencia {
     // -------------------------------------------------------------------------
     // Funciones Auxiliares de Parseo JSON sin Dependencias Externas
     // -------------------------------------------------------------------------
+
+    /**
+     * Valida los valores antes de modificar el clúster. La validación estructural
+     * completa y la aplicación transaccional se realizan por separado.
+     */
+    private static void validarCamposEscenarioJson(String json) throws IOException {
+        try {
+            validarEnteroJson(json, "duracionCicloMs", true);
+            validarEnteroJson(json, "latenciaRedCiclos", false);
+            ListaEnlazada<String> computadores = extraerObjetosArrayJson(json, "computadores");
+            for (int i = 0; i < computadores.obtenerTamano(); i++) {
+                String objeto = computadores.obtener(i);
+                validarEnteroJson(objeto, "ramTotalMb", false);
+                validarEnteroJson(objeto, "quantum", false);
+                String ram = extraerValorJson(objeto, "ramTotalMb");
+                if (!ram.isEmpty() && Integer.parseInt(ram) < 1) {
+                    throw new IllegalArgumentException("ramTotalMb debe ser mayor que cero");
+                }
+                String politica = extraerValorJson(objeto, "politica");
+                if (!politica.isEmpty()) PoliticaPlanificacion.valueOf(politica);
+            }
+            ListaEnlazada<String> buffers = extraerObjetosArrayJson(json, "buffers");
+            for (int i = 0; i < buffers.obtenerTamano(); i++) {
+                String objeto = buffers.obtener(i);
+                validarEnteroJson(objeto, "capacidad", false);
+                validarEnteroJson(objeto, "memoriaMb", false);
+                String capacidad = extraerValorJson(objeto, "capacidad");
+                if (!capacidad.isEmpty() && Integer.parseInt(capacidad) < 1) {
+                    throw new IllegalArgumentException("capacidad del buffer debe ser mayor que cero");
+                }
+            }
+            ListaEnlazada<String> procesos = extraerObjetosArrayJson(json, "procesos");
+            for (int i = 0; i < procesos.obtenerTamano(); i++) {
+                String objeto = procesos.obtener(i);
+                String tipo = extraerValorJson(objeto, "tipo");
+                if (!tipo.isEmpty()) TipoProceso.valueOf(tipo);
+                String[] campos = {"prioridad", "memoria", "deadline", "instrucciones",
+                    "ciclosPorItem", "itemsRequeridos", "ciclosEntreIO", "duracionBloqueoIO"};
+                for (String campo : campos) validarEnteroJson(objeto, campo, false);
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Escenario JSON inválido: " + e.getMessage(), e);
+        }
+    }
+
+    private static void validarEnteroJson(String objeto, String campo, boolean largo) {
+        String valor = extraerValorJson(objeto, campo);
+        if (!valor.isEmpty()) {
+            try {
+                if (largo) Long.parseLong(valor);
+                else Integer.parseInt(valor);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("campo '" + campo + "' no es un entero válido", e);
+            }
+        }
+    }
 
     private static String escaparJson(String texto) {
         StringBuilder resultado = new StringBuilder();
