@@ -1,4 +1,4 @@
-package avilaos.gui;
+package avilaos.persistencia;
 
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
@@ -13,8 +13,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Gestor de persistencia para guardar y cargar escenarios de simulación en formato CSV o JSON.
@@ -323,8 +321,8 @@ public class GestorPersistencia {
         for (int i = 0; i < totalComp; i++) {
             Computador c = cluster.getComputadores().obtener(i);
             json.append("    {\n");
-            json.append("      \"id\": \"").append(c.getId()).append("\",\n");
-            json.append("      \"nombre\": \"").append(c.getNombre()).append("\",\n");
+            json.append("      \"id\": \"").append(escaparJson(c.getId())).append("\",\n");
+            json.append("      \"nombre\": \"").append(escaparJson(c.getNombre())).append("\",\n");
             json.append("      \"ramTotalMb\": ").append(c.getMemoria().getCapacidadTotal()).append(",\n");
             json.append("      \"politica\": \"").append(c.getSo().getPolitica().getTipo().name()).append("\",\n");
             json.append("      \"quantum\": ").append(c.getSo().getQuantum()).append("\n");
@@ -338,9 +336,9 @@ public class GestorPersistencia {
         for (int i = 0; i < totalBuffers; i++) {
             BufferAcotado b = cluster.getGestorSincronizacion().getBuffers().obtener(i);
             json.append("    {\n");
-            json.append("      \"id\": \"").append(b.getId()).append("\",\n");
-            json.append("      \"nombre\": \"").append(b.getNombre()).append("\",\n");
-            json.append("      \"computadorAnfitrion\": \"").append(b.getIdComputadorAnfitrion()).append("\",\n");
+            json.append("      \"id\": \"").append(escaparJson(b.getId())).append("\",\n");
+            json.append("      \"nombre\": \"").append(escaparJson(b.getNombre())).append("\",\n");
+            json.append("      \"computadorAnfitrion\": \"").append(escaparJson(b.getIdComputadorAnfitrion())).append("\",\n");
             json.append("      \"capacidad\": ").append(b.getCapacidad()).append(",\n");
             json.append("      \"memoriaMb\": ").append(b.getMemoriaReservadaMb()).append("\n");
             json.append("    }").append(i < totalBuffers - 1 ? ",\n" : "\n");
@@ -404,14 +402,14 @@ public class GestorPersistencia {
     private static String generarJsonProceso(Proceso p, String idComp) {
         String idBuffer = p.getPcb().getIdBuffer() != null ? p.getPcb().getIdBuffer() : "";
         return "    {\n"
-                + "      \"nombre\": \"" + p.getPcb().getNombre() + "\",\n"
-                + "      \"computador\": \"" + idComp + "\",\n"
+                + "      \"nombre\": \"" + escaparJson(p.getPcb().getNombre()) + "\",\n"
+                + "      \"computador\": \"" + escaparJson(idComp) + "\",\n"
                 + "      \"tipo\": \"" + p.getPcb().getTipo().name() + "\",\n"
                 + "      \"prioridad\": " + p.getPcb().getPrioridad() + ",\n"
                 + "      \"memoria\": " + p.getPcb().getMemoriaAsignada() + ",\n"
                 + "      \"deadline\": " + p.getPcb().getDeadlineInicial() + ",\n"
                 + "      \"instrucciones\": " + p.getPcb().getTiempoEjecucionTotal() + ",\n"
-                + "      \"idBuffer\": \"" + idBuffer + "\",\n"
+                + "      \"idBuffer\": \"" + escaparJson(idBuffer) + "\",\n"
                 + "      \"ciclosPorItem\": " + p.getPcb().getCiclosPorItem() + ",\n"
                 + "      \"itemsRequeridos\": " + p.getPcb().getItemsRequeridos() + ",\n"
                 + "      \"ciclosEntreIO\": " + p.getPcb().getCiclosEntreIO() + ",\n"
@@ -436,134 +434,361 @@ public class GestorPersistencia {
             }
         }
         String json = sb.toString();
+        ValidadorJson.validarObjeto(json);
+        synchronized (cluster.getRelojGlobal()) {
+            validarCamposEscenarioJson(json);
+            validarBuffersEscenarioJson(json, cluster);
+            validarReferenciasProcesos(json, cluster);
 
-        // 1. Configuración de reloj y red
-        String duracionMs = extraerValorJson(json, "duracionCicloMs");
-        if (!duracionMs.isEmpty()) {
-            try { cluster.getRelojGlobal().setDuracionCicloMs(Long.parseLong(duracionMs)); } catch (Exception ignored) {}
-        }
-        String latenciaRed = extraerValorJson(json, "latenciaRedCiclos");
-        if (!latenciaRed.isEmpty()) {
-            try { cluster.setLatenciaRedCiclos(Integer.parseInt(latenciaRed)); } catch (Exception ignored) {}
-        }
+            // 1. Configuración de reloj y red
+            String duracionMs = extraerValorJson(configuracionJson(json), "duracionCicloMs");
+            if (!duracionMs.isEmpty()) {
+                cluster.getRelojGlobal().setDuracionCicloMs(Long.parseLong(duracionMs));
+            }
+            String latenciaRed = extraerValorJson(configuracionJson(json), "latenciaRedCiclos");
+            if (!latenciaRed.isEmpty()) {
+                cluster.setLatenciaRedCiclos(Integer.parseInt(latenciaRed));
+            }
 
-        // 2. Computadores
-        ListaEnlazada<String> compsJson = extraerObjetosArrayJson(json, "computadores");
-        for (int k = 0; k < compsJson.obtenerTamano(); k++) {
-            String cj = compsJson.obtener(k);
-            String id = extraerValorJson(cj, "id");
-            String nombre = extraerValorJson(cj, "nombre");
-            String ramStr = extraerValorJson(cj, "ramTotalMb");
-            String polStr = extraerValorJson(cj, "politica");
-            String quantumStr = extraerValorJson(cj, "quantum");
+            // 2. Computadores
+            ListaEnlazada<String> compsJson = extraerObjetosArrayJson(json, "computadores");
+            for (int k = 0; k < compsJson.obtenerTamano(); k++) {
+                String cj = compsJson.obtener(k);
+                String id = extraerValorJson(cj, "id");
+                String nombre = extraerValorJson(cj, "nombre");
+                String ramStr = extraerValorJson(cj, "ramTotalMb");
+                String polStr = extraerValorJson(cj, "politica");
+                String quantumStr = extraerValorJson(cj, "quantum");
 
-            if (!id.isEmpty()) {
-                Computador comp = cluster.buscarPorId(id);
-                if (comp == null && !ramStr.isEmpty()) {
-                    comp = new Computador(id, nombre, Integer.parseInt(ramStr));
-                    cluster.agregarComputador(comp);
-                }
-                if (comp != null) {
-                    if (!polStr.isEmpty()) {
-                        try { comp.cambiarPolitica(PoliticaPlanificacion.valueOf(polStr)); } catch (Exception ignored) {}
+                if (!id.isEmpty()) {
+                    Computador comp = cluster.buscarPorId(id);
+                    if (comp == null && !ramStr.isEmpty()) {
+                        comp = new Computador(id, nombre, Integer.parseInt(ramStr));
+                        cluster.agregarComputador(comp);
                     }
-                    if (!quantumStr.isEmpty()) {
-                        try { comp.cambiarQuantum(Integer.parseInt(quantumStr)); } catch (Exception ignored) {}
+                    if (comp != null) {
+                        if (!polStr.isEmpty()) {
+                            comp.cambiarPolitica(PoliticaPlanificacion.valueOf(polStr));
+                        }
+                        if (!quantumStr.isEmpty()) {
+                            comp.cambiarQuantum(Integer.parseInt(quantumStr));
+                        }
                     }
                 }
             }
-        }
 
-        // 3. Buffers
-        ListaEnlazada<String> buffersJson = extraerObjetosArrayJson(json, "buffers");
-        for (int k = 0; k < buffersJson.obtenerTamano(); k++) {
-            String bj = buffersJson.obtener(k);
-            String id = extraerValorJson(bj, "id");
-            String nombre = extraerValorJson(bj, "nombre");
-            String host = extraerValorJson(bj, "computadorAnfitrion");
-            String capStr = extraerValorJson(bj, "capacidad");
-            String memStr = extraerValorJson(bj, "memoriaMb");
+            // 3. Buffers
+            ListaEnlazada<String> buffersJson = extraerObjetosArrayJson(json, "buffers");
+            for (int k = 0; k < buffersJson.obtenerTamano(); k++) {
+                String bj = buffersJson.obtener(k);
+                String id = extraerValorJson(bj, "id");
+                String nombre = extraerValorJson(bj, "nombre");
+                String host = extraerValorJson(bj, "computadorAnfitrion");
+                String capStr = extraerValorJson(bj, "capacidad");
+                String memStr = extraerValorJson(bj, "memoriaMb");
 
-            if (!id.isEmpty() && cluster.getGestorSincronizacion() != null) {
-                if (cluster.getGestorSincronizacion().buscarBuffer(id) == null) {
-                    int cap = !capStr.isEmpty() ? Integer.parseInt(capStr) : 3;
+                if (!id.isEmpty() && cluster.getGestorSincronizacion() != null) {
+                    if (cluster.getGestorSincronizacion().buscarBuffer(id) == null) {
+                        int cap = !capStr.isEmpty() ? Integer.parseInt(capStr) : 3;
+                        int mem = !memStr.isEmpty() ? Integer.parseInt(memStr) : 256;
+                        cluster.getGestorSincronizacion().crearBuffer(id, nombre, host, cap, mem);
+                    }
+                }
+            }
+
+            // 4. Procesos
+            int cargados = 0;
+            ListaEnlazada<String> procesosJson = extraerObjetosArrayJson(json, "procesos");
+            for (int k = 0; k < procesosJson.obtenerTamano(); k++) {
+                String pj = procesosJson.obtener(k);
+                String nombre = extraerValorJson(pj, "nombre");
+                String idComp = extraerValorJson(pj, "computador");
+                String tipoStr = extraerValorJson(pj, "tipo");
+                String prioStr = extraerValorJson(pj, "prioridad");
+                String memStr = extraerValorJson(pj, "memoria");
+                String deadStr = extraerValorJson(pj, "deadline");
+                String instStr = extraerValorJson(pj, "instrucciones");
+
+                if (!nombre.isEmpty() && !tipoStr.isEmpty()) {
+                    TipoProceso tipo = TipoProceso.valueOf(tipoStr);
+                    int prio = !prioStr.isEmpty() ? Integer.parseInt(prioStr) : 1;
                     int mem = !memStr.isEmpty() ? Integer.parseInt(memStr) : 256;
-                    cluster.getGestorSincronizacion().crearBuffer(id, nombre, host, cap, mem);
+                    int deadline = !deadStr.isEmpty() ? Integer.parseInt(deadStr) : 20;
+                    int inst = !instStr.isEmpty() ? Integer.parseInt(instStr) : 5;
+
+                    Proceso p = new Proceso(nombre, idComp, tipo, prio, mem, deadline, inst);
+
+                    String idBuf = extraerValorJson(pj, "idBuffer");
+                    if (!idBuf.isEmpty()) {
+                        p.getPcb().setIdBuffer(idBuf);
+                    }
+                    String cpiStr = extraerValorJson(pj, "ciclosPorItem");
+                    if (!cpiStr.isEmpty()) {
+                        p.getPcb().setCiclosPorItem(Integer.parseInt(cpiStr));
+                    }
+                    String reqStr = extraerValorJson(pj, "itemsRequeridos");
+                    if (!reqStr.isEmpty()) {
+                        p.getPcb().setItemsRequeridos(Integer.parseInt(reqStr));
+                    }
+                    String eioStr = extraerValorJson(pj, "ciclosEntreIO");
+                    if (!eioStr.isEmpty()) {
+                        p.getPcb().setCiclosEntreIO(Integer.parseInt(eioStr));
+                    }
+                    String dioStr = extraerValorJson(pj, "duracionBloqueoIO");
+                    if (!dioStr.isEmpty()) {
+                        p.getPcb().setDuracionBloqueoIO(Integer.parseInt(dioStr));
+                    }
+
+                    Computador comp = cluster.buscarPorId(idComp);
+                    if (comp != null) {
+                        comp.admitirProceso(p, cluster.getRelojGlobal().getCicloActual());
+                    } else {
+                        cluster.asignarProcesoAutomatico(p);
+                    }
+                    cargados++;
                 }
             }
+
+            return cargados;
         }
-
-        // 4. Procesos
-        int cargados = 0;
-        ListaEnlazada<String> procesosJson = extraerObjetosArrayJson(json, "procesos");
-        for (int k = 0; k < procesosJson.obtenerTamano(); k++) {
-            String pj = procesosJson.obtener(k);
-            String nombre = extraerValorJson(pj, "nombre");
-            String idComp = extraerValorJson(pj, "computador");
-            String tipoStr = extraerValorJson(pj, "tipo");
-            String prioStr = extraerValorJson(pj, "prioridad");
-            String memStr = extraerValorJson(pj, "memoria");
-            String deadStr = extraerValorJson(pj, "deadline");
-            String instStr = extraerValorJson(pj, "instrucciones");
-
-            if (!nombre.isEmpty() && !tipoStr.isEmpty()) {
-                TipoProceso tipo = TipoProceso.valueOf(tipoStr);
-                int prio = !prioStr.isEmpty() ? Integer.parseInt(prioStr) : 1;
-                int mem = !memStr.isEmpty() ? Integer.parseInt(memStr) : 256;
-                int deadline = !deadStr.isEmpty() ? Integer.parseInt(deadStr) : 20;
-                int inst = !instStr.isEmpty() ? Integer.parseInt(instStr) : 5;
-
-                Proceso p = new Proceso(nombre, idComp, tipo, prio, mem, deadline, inst);
-
-                String idBuf = extraerValorJson(pj, "idBuffer");
-                if (!idBuf.isEmpty()) {
-                    p.getPcb().setIdBuffer(idBuf);
-                }
-                String cpiStr = extraerValorJson(pj, "ciclosPorItem");
-                if (!cpiStr.isEmpty()) {
-                    p.getPcb().setCiclosPorItem(Integer.parseInt(cpiStr));
-                }
-                String reqStr = extraerValorJson(pj, "itemsRequeridos");
-                if (!reqStr.isEmpty()) {
-                    p.getPcb().setItemsRequeridos(Integer.parseInt(reqStr));
-                }
-                String eioStr = extraerValorJson(pj, "ciclosEntreIO");
-                if (!eioStr.isEmpty()) {
-                    p.getPcb().setCiclosEntreIO(Integer.parseInt(eioStr));
-                }
-                String dioStr = extraerValorJson(pj, "duracionBloqueoIO");
-                if (!dioStr.isEmpty()) {
-                    p.getPcb().setDuracionBloqueoIO(Integer.parseInt(dioStr));
-                }
-
-                Computador comp = cluster.buscarPorId(idComp);
-                if (comp != null) {
-                    comp.admitirProceso(p, cluster.getRelojGlobal().getCicloActual());
-                } else {
-                    cluster.asignarProcesoAutomatico(p);
-                }
-                cargados++;
-            }
-        }
-
-        return cargados;
     }
 
     // -------------------------------------------------------------------------
     // Funciones Auxiliares de Parseo JSON sin Dependencias Externas
     // -------------------------------------------------------------------------
 
-    private static String extraerValorJson(String jsonObjeto, String clave) {
-        String patron = "\"" + clave + "\"\\s*:\\s*(\"[^\"]*\"|[^,\\}\\s]+)";
-        Matcher m = Pattern.compile(patron).matcher(jsonObjeto);
-        if (m.find()) {
-            String val = m.group(1).trim();
-            if (val.startsWith("\"") && val.endsWith("\"")) {
-                return val.substring(1, val.length() - 1);
+    /**
+     * Valida los valores antes de modificar el clúster. La validación estructural
+     * completa y la aplicación transaccional se realizan por separado.
+     */
+    private static String configuracionJson(String json) throws IOException {
+        String valor = ValidadorJson.miembro(json, "configuracion");
+        return valor == null ? "{}" : valor;
+    }
+
+    private static void validarCamposEscenarioJson(String json) throws IOException {
+        try {
+            validarEnteroJson(configuracionJson(json), "duracionCicloMs", true);
+            validarEnteroJson(configuracionJson(json), "latenciaRedCiclos", false);
+            ListaEnlazada<String> computadores = extraerObjetosArrayJson(json, "computadores");
+            ListaEnlazada<String> ids = new ListaEnlazada<>();
+            for (int i = 0; i < computadores.obtenerTamano(); i++) {
+                String objeto = computadores.obtener(i);
+                validarTextoJson(objeto, "id", true);
+                validarTextoJson(objeto, "nombre", false);
+                validarTextoJson(objeto, "politica", false);
+                String id = extraerValorJson(objeto, "id").toLowerCase(java.util.Locale.ROOT);
+                if (ids.contiene(id)) throw new IOException("Computador duplicado: " + id);
+                ids.agregar(id);
+                if (ValidadorJson.miembro(objeto, "ramTotalMb") == null)
+                    throw new IOException("Falta ramTotalMb en computador " + id);
+                validarEnteroJson(objeto, "ramTotalMb", false);
+                validarEnteroJson(objeto, "quantum", false);
+                String ram = extraerValorJson(objeto, "ramTotalMb");
+                if (!ram.isEmpty() && Integer.parseInt(ram) < 1) {
+                    throw new IllegalArgumentException("ramTotalMb debe ser mayor que cero");
+                }
+                String politica = extraerValorJson(objeto, "politica");
+                if (!politica.isEmpty()) PoliticaPlanificacion.valueOf(politica);
             }
-            return val;
+            ListaEnlazada<String> buffers = extraerObjetosArrayJson(json, "buffers");
+            for (int i = 0; i < buffers.obtenerTamano(); i++) {
+                String objeto = buffers.obtener(i);
+                validarTextoJson(objeto, "id", true);
+                validarTextoJson(objeto, "nombre", false);
+                validarTextoJson(objeto, "computadorAnfitrion", true);
+                validarEnteroJson(objeto, "capacidad", false);
+                validarEnteroJson(objeto, "memoriaMb", false);
+                String capacidad = extraerValorJson(objeto, "capacidad");
+                if (!capacidad.isEmpty() && Integer.parseInt(capacidad) < 1) {
+                    throw new IllegalArgumentException("capacidad del buffer debe ser mayor que cero");
+                }
+            }
+            ListaEnlazada<String> procesos = extraerObjetosArrayJson(json, "procesos");
+            for (int i = 0; i < procesos.obtenerTamano(); i++) {
+                String objeto = procesos.obtener(i);
+                validarTextoJson(objeto, "nombre", true);
+                validarTextoJson(objeto, "tipo", true);
+                validarTextoJson(objeto, "computador", false);
+                validarTextoJson(objeto, "idBuffer", false);
+                String tipo = extraerValorJson(objeto, "tipo");
+                if (!tipo.isEmpty()) TipoProceso.valueOf(tipo);
+                String[] campos = {"prioridad", "memoria", "deadline", "instrucciones",
+                    "ciclosPorItem", "itemsRequeridos", "ciclosEntreIO", "duracionBloqueoIO"};
+                for (String campo : campos) validarEnteroJson(objeto, campo, false);
+                for (String campo : new String[]{"memoria", "deadline", "instrucciones", "prioridad"}) {
+                    String valor = extraerValorJson(objeto, campo);
+                    if (!valor.isEmpty() && Integer.parseInt(valor) == 0)
+                        throw new IOException("El campo " + campo + " debe ser positivo.");
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Escenario JSON inválido: " + e.getMessage(), e);
         }
-        return "";
+    }
+
+    private static void validarEnteroJson(String objeto, String campo, boolean largo) throws IOException {
+        String bruto = ValidadorJson.miembro(objeto, campo);
+        if (bruto != null && !bruto.matches("[0-9]+")) {
+            throw new IOException("El campo '" + campo + "' debe ser un entero no negativo, sin comillas.");
+        }
+        String valor = extraerValorJson(objeto, campo);
+        if (!valor.isEmpty()) {
+            try {
+                if (largo) Long.parseLong(valor);
+                else Integer.parseInt(valor);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("campo '" + campo + "' no es un entero válido", e);
+            }
+        }
+    }
+
+    private static void validarTextoJson(String objeto, String campo, boolean obligatorio) throws IOException {
+        String bruto = ValidadorJson.miembro(objeto, campo);
+        if (bruto == null) {
+            if (obligatorio) throw new IOException("Falta el campo '" + campo + "'.");
+            return;
+        }
+        if (!bruto.startsWith("\"")) throw new IOException("El campo '" + campo + "' debe ser texto.");
+        if (obligatorio && extraerValorJson(objeto, campo).isBlank())
+            throw new IOException("El campo '" + campo + "' no puede estar vacío.");
+    }
+
+    private static void validarBuffersEscenarioJson(String json, ClusterDistribuido cluster) throws IOException {
+        ListaEnlazada<String> computadores = extraerObjetosArrayJson(json, "computadores");
+        ListaEnlazada<String> buffers = extraerObjetosArrayJson(json, "buffers");
+        for (int i = 0; i < buffers.obtenerTamano(); i++) {
+            String buffer = buffers.obtener(i);
+            String id = extraerValorJson(buffer, "id");
+            String host = extraerValorJson(buffer, "computadorAnfitrion");
+            if (id.isBlank() || host.isBlank()) {
+                throw new IOException("Cada buffer debe tener un ID y un computador anfitrión.");
+            }
+            String memoriaStr = extraerValorJson(buffer, "memoriaMb");
+            int memoria = memoriaStr.isEmpty() ? 256 : Integer.parseInt(memoriaStr);
+            if (memoria < 0) {
+                throw new IOException("La memoria del buffer " + id + " no puede ser negativa.");
+            }
+            if (cluster.getGestorSincronizacion().buscarBuffer(id) != null) continue;
+
+            Computador existente = cluster.buscarPorId(host);
+            long libre = existente != null ? existente.getMemoria().getMemoriaLibre() : -1;
+            if (existente == null) {
+                for (int j = 0; j < computadores.obtenerTamano(); j++) {
+                    String computador = computadores.obtener(j);
+                    if (host.equalsIgnoreCase(extraerValorJson(computador, "id"))) {
+                        String ram = extraerValorJson(computador, "ramTotalMb");
+                        if (!ram.isEmpty()) libre = Integer.parseInt(ram);
+                        break;
+                    }
+                }
+            }
+            if (libre < 0) {
+                throw new IOException("No existe el computador anfitrión '" + host + "' del buffer " + id + ".");
+            }
+
+            long reservado = 0;
+            for (int j = 0; j < i; j++) {
+                String anterior = buffers.obtener(j);
+                String idAnterior = extraerValorJson(anterior, "id");
+                if (idAnterior.equalsIgnoreCase(id)) {
+                    throw new IOException("ID de buffer duplicado: " + id + ".");
+                }
+                if (host.equalsIgnoreCase(extraerValorJson(anterior, "computadorAnfitrion"))
+                        && cluster.getGestorSincronizacion().buscarBuffer(idAnterior) == null) {
+                    String memoriaAnterior = extraerValorJson(anterior, "memoriaMb");
+                    reservado += memoriaAnterior.isEmpty() ? 256 : Integer.parseInt(memoriaAnterior);
+                }
+            }
+            if (reservado + memoria > libre) {
+                throw new IOException("RAM insuficiente en " + host + " para el buffer " + id + ".");
+            }
+        }
+    }
+
+    private static void validarReferenciasProcesos(String json, ClusterDistribuido cluster) throws IOException {
+        ListaEnlazada<String> computadores = extraerObjetosArrayJson(json, "computadores");
+        ListaEnlazada<String> buffers = extraerObjetosArrayJson(json, "buffers");
+        ListaEnlazada<String> procesos = extraerObjetosArrayJson(json, "procesos");
+        for (int i = 0; i < procesos.obtenerTamano(); i++) {
+            String p = procesos.obtener(i);
+            String host = extraerValorJson(p, "computador");
+            if (!host.isEmpty() && cluster.buscarPorId(host) == null && !contieneId(computadores, host))
+                throw new IOException("Computador desconocido en proceso: " + host);
+            String buffer = extraerValorJson(p, "idBuffer");
+            if (!buffer.isEmpty() && cluster.getGestorSincronizacion().buscarBuffer(buffer) == null
+                    && !contieneId(buffers, buffer))
+                throw new IOException("Buffer desconocido en proceso: " + buffer);
+        }
+    }
+
+    private static boolean contieneId(ListaEnlazada<String> objetos, String id) throws IOException {
+        for (int i = 0; i < objetos.obtenerTamano(); i++)
+            if (id.equalsIgnoreCase(extraerValorJson(objetos.obtener(i), "id"))) return true;
+        return false;
+    }
+
+    private static String escaparJson(String texto) {
+        StringBuilder resultado = new StringBuilder();
+        for (int i = 0; i < texto.length(); i++) {
+            char c = texto.charAt(i);
+            switch (c) {
+                case '"' -> resultado.append("\\\"");
+                case '\\' -> resultado.append("\\\\");
+                case '\b' -> resultado.append("\\b");
+                case '\f' -> resultado.append("\\f");
+                case '\n' -> resultado.append("\\n");
+                case '\r' -> resultado.append("\\r");
+                case '\t' -> resultado.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        resultado.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        resultado.append(c);
+                    }
+                }
+            }
+        }
+        return resultado.toString();
+    }
+
+    static String desescaparJson(String texto) {
+        StringBuilder resultado = new StringBuilder();
+        for (int i = 0; i < texto.length(); i++) {
+            char c = texto.charAt(i);
+            if (c != '\\') {
+                resultado.append(c);
+                continue;
+            }
+            if (++i >= texto.length()) {
+                throw new IllegalArgumentException("Escape JSON incompleto");
+            }
+            char escape = texto.charAt(i);
+            switch (escape) {
+                case '"', '\\', '/' -> resultado.append(escape);
+                case 'b' -> resultado.append('\b');
+                case 'f' -> resultado.append('\f');
+                case 'n' -> resultado.append('\n');
+                case 'r' -> resultado.append('\r');
+                case 't' -> resultado.append('\t');
+                case 'u' -> {
+                    if (i + 4 >= texto.length()) {
+                        throw new IllegalArgumentException("Escape Unicode JSON incompleto");
+                    }
+                    resultado.append((char) Integer.parseInt(texto.substring(i + 1, i + 5), 16));
+                    i += 4;
+                }
+                default -> throw new IllegalArgumentException("Escape JSON inválido");
+            }
+        }
+        return resultado.toString();
+    }
+
+    private static String extraerValorJson(String objeto, String clave) throws IOException {
+        String valor = ValidadorJson.miembro(objeto, clave);
+        if (valor == null) return "";
+        if (valor.startsWith("\"")) return desescaparJson(valor.substring(1, valor.length() - 1));
+        return valor;
     }
 
     /**
@@ -579,30 +804,8 @@ public class GestorPersistencia {
         return true;
     }
 
-    private static ListaEnlazada<String> extraerObjetosArrayJson(String json, String nombreArray) {
-        ListaEnlazada<String> objetos = new ListaEnlazada<>();
-        int idx = json.indexOf("\"" + nombreArray + "\"");
-        if (idx == -1) return objetos;
-        int inicioArray = json.indexOf("[", idx);
-        int finArray = json.indexOf("]", inicioArray);
-        if (inicioArray == -1 || finArray == -1) return objetos;
-
-        String contenido = json.substring(inicioArray + 1, finArray);
-        int profundidad = 0;
-        int inicioObj = -1;
-        for (int i = 0; i < contenido.length(); i++) {
-            char c = contenido.charAt(i);
-            if (c == '{') {
-                if (profundidad == 0) inicioObj = i;
-                profundidad++;
-            } else if (c == '}') {
-                profundidad--;
-                if (profundidad == 0 && inicioObj != -1) {
-                    objetos.agregar(contenido.substring(inicioObj, i + 1));
-                    inicioObj = -1;
-                }
-            }
-        }
-        return objetos;
+    private static ListaEnlazada<String> extraerObjetosArrayJson(String json, String nombreArray) throws IOException {
+        String valor = ValidadorJson.miembro(json, nombreArray);
+        return valor == null ? new ListaEnlazada<>() : ValidadorJson.objetos(valor);
     }
 }

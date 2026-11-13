@@ -116,10 +116,11 @@ public class RelojGlobal implements Runnable {
 
     @Override
     public void run() {
-        while (ejecutando) {
+        while (true) {
             try {
-                if (!enPausa) {
-                    avanzarUnCiclo();
+                synchronized (this) {
+                    if (!ejecutando || Thread.currentThread() != hiloReloj) return;
+                    if (!enPausa) avanzarUnCiclo();
                 }
                 Thread.sleep(duracionCicloMs);
             } catch (InterruptedException e) {
@@ -133,6 +134,7 @@ public class RelojGlobal implements Runnable {
      * Inicia el hilo del reloj global de simulación.
      */
     public synchronized void iniciar() {
+        enPausa = false;
         if (!ejecutando) {
             ejecutando = true;
             enPausa = false;
@@ -153,7 +155,7 @@ public class RelojGlobal implements Runnable {
      * Reanuda el avance automático del reloj.
      */
     public synchronized void reanudar() {
-        this.enPausa = false;
+        iniciar();
     }
 
     /**

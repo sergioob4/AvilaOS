@@ -156,9 +156,6 @@ public class Proceso {
         if (pcb.getEstado().esTransicionValida(EstadoProceso.EJECUCION)) {
             pcb.setEstado(EstadoProceso.EJECUCION);
             pcb.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
-            if (pcb.getCicloPrimeraEjecucion() == -1) {
-                pcb.setCicloPrimeraEjecucion(cicloGlobal);
-            }
         }
     }
 
