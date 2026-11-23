@@ -1,5 +1,6 @@
 package avilaos.sistemaarchivos;
 
+import avilaos.enums.ModoUsuario;
 import avilaos.enums.Permiso;
 import avilaos.estructuras.ListaEnlazada;
 import java.util.concurrent.Semaphore;
@@ -58,6 +59,33 @@ public class SistemaArchivos {
         adquirir();
         try {
             return buscarSinBloqueo(ruta);
+        } finally {
+            liberar();
+        }
+    }
+
+    /**
+     * Resuelve una lectura autorizada y devuelve el inicio de la cadena que leerá el disco.
+     * El SO proporciona la identidad y el modo de la sesión que solicitó la operación.
+     */
+    public int resolverLectura(String ruta, String usuario, ModoUsuario modo) {
+        if (modo == null || usuario == null || usuario.isBlank()) {
+            throw new IllegalArgumentException("La lectura requiere un usuario y un modo.");
+        }
+        adquirir();
+        try {
+            if (!(nodoExistente(ruta) instanceof Archivo archivo)) {
+                throw new IllegalArgumentException(ruta + " no es un archivo.");
+            }
+            if (!modo.esAdministrador() && archivo.getPermiso() == Permiso.PRIVADO
+                    && !archivo.getDueno().equals(usuario.trim())) {
+                throw new SecurityException("Permiso de lectura denegado para " + ruta + ".");
+            }
+            int inicio = archivo.getPrimerBloque();
+            if (inicio == Archivo.SIN_BLOQUES) {
+                throw new IllegalStateException("El archivo todavía no tiene bloques asignados.");
+            }
+            return inicio;
         } finally {
             liberar();
         }
