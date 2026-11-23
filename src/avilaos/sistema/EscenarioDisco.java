@@ -22,17 +22,17 @@ public final class EscenarioDisco {
         int cantidad = Math.min(4, datos);
         if (archivos.buscar("/ejemplo.txt") != null
                 || (datos > cantidad && archivos.buscar("/notas.txt") != null)) return false;
-        var ejemplo = archivos.crearArchivo("/", "ejemplo.txt", SistemaArchivos.ADMINISTRADOR,
-                Permiso.PUBLICO, cantidad, null, SistemaArchivos.ADMINISTRADOR, ModoUsuario.ADMINISTRADOR);
-        disco.iniciarTransferencia(ejemplo.getPrimerBloque(), DiscoSimulado.Operacion.LECTURA);
+        String admin = SistemaArchivos.ADMINISTRADOR;
+        archivos.crearArchivo("/", "ejemplo.txt", admin, Permiso.PUBLICO, cantidad, null, admin, ModoUsuario.ADMINISTRADOR);
+        archivos.solicitarLectura("/ejemplo.txt", admin, ModoUsuario.ADMINISTRADOR);
         if (swap > 0) {
             int proceso = disco.asignarSwap("P-demo", Math.min(3, swap));
             disco.iniciarTransferencia(proceso, DiscoSimulado.Operacion.ESCRITURA);
         }
         if (datos > cantidad) {
-            var notas = archivos.crearArchivo("/", "notas.txt", SistemaArchivos.ADMINISTRADOR,
-                    Permiso.PRIVADO, Math.min(3, datos - cantidad), null, SistemaArchivos.ADMINISTRADOR, ModoUsuario.ADMINISTRADOR);
-            disco.iniciarTransferencia(notas.getPrimerBloque(), DiscoSimulado.Operacion.LECTURA);
+            archivos.crearArchivo("/", "notas.txt", admin, Permiso.PRIVADO, Math.min(3, datos - cantidad),
+                    null, admin, ModoUsuario.ADMINISTRADOR);
+            archivos.solicitarLectura("/notas.txt", admin, ModoUsuario.ADMINISTRADOR);
         }
         return true;
     }

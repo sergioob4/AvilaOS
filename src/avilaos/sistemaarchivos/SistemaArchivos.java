@@ -5,6 +5,7 @@ import avilaos.enums.Permiso;
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.hardware.ConfiguracionDisco;
 import avilaos.hardware.DiscoSimulado;
+import avilaos.hardware.SolicitudDisco;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -76,10 +77,10 @@ public class SistemaArchivos {
     }
 
     /**
-     * Resuelve una lectura autorizada y devuelve el inicio de la cadena que leerá el disco.
+     * Autoriza la lectura y encola la cadena mientras el árbol sigue protegido.
      * El SO proporciona la identidad y el modo de la sesión que solicitó la operación.
      */
-    public int resolverLectura(String ruta, String usuario, ModoUsuario modo) {
+    public SolicitudDisco solicitarLectura(String ruta, String usuario, ModoUsuario modo) {
         if (modo == null || usuario == null || usuario.isBlank()) {
             throw new IllegalArgumentException("La lectura requiere un usuario y un modo.");
         }
@@ -96,7 +97,7 @@ public class SistemaArchivos {
             if (inicio == Archivo.SIN_BLOQUES) {
                 throw new IllegalStateException("El archivo todavía no tiene bloques asignados.");
             }
-            return inicio;
+            return disco.iniciarTransferencia(inicio, DiscoSimulado.Operacion.LECTURA);
         } finally {
             liberar();
         }
