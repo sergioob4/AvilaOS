@@ -1,6 +1,7 @@
 package avilaos.sistema;
 
 import avilaos.enums.PoliticaPlanificacion;
+import avilaos.hardware.ConfiguracionDisco;
 
 /**
  * Parámetros con los que se arranca una simulación (resultado de la vista de configuración).
@@ -10,8 +11,8 @@ import avilaos.enums.PoliticaPlanificacion;
  */
 public class ConfiguracionInicial {
 
-    public static final int MIN_COMPUTADORES = 2;
-    public static final int MAX_COMPUTADORES = 6;
+    public static final int MIN_COMPUTADORES = 1;
+    public static final int MAX_COMPUTADORES = 1;
     public static final int MIN_RAM_MB = 128;
     public static final int MAX_RAM_MB = 65536;
     public static final int MIN_QUANTUM = 1;
@@ -21,6 +22,12 @@ public class ConfiguracionInicial {
     public static final int MIN_CICLO_MS = 100;
     public static final int MAX_CICLO_MS = 2500;
 
+    private final ConfiguracionDisco disco;
+
+    public ConfiguracionDisco getDisco() {
+        return disco;
+    }
+
     private final int[] ramMb;
     private final PoliticaPlanificacion[] politicas;
     private final int[] quantums;
@@ -29,6 +36,12 @@ public class ConfiguracionInicial {
 
     public ConfiguracionInicial(int[] ramMb, PoliticaPlanificacion[] politicas, int[] quantums,
                                 int latenciaRedCiclos, long duracionCicloMs) {
+        this(ramMb, politicas, quantums, latenciaRedCiclos, duracionCicloMs, ConfiguracionDisco.PREDETERMINADA);
+    }
+
+    public ConfiguracionInicial(int[] ramMb, PoliticaPlanificacion[] politicas, int[] quantums,
+                                int latenciaRedCiclos, long duracionCicloMs, ConfiguracionDisco disco) {
+        this.disco = disco;
         if (ramMb.length < MIN_COMPUTADORES || politicas.length != ramMb.length || quantums.length != ramMb.length) {
             throw new IllegalArgumentException("Configuración de computadores inconsistente.");
         }
@@ -39,17 +52,17 @@ public class ConfiguracionInicial {
         this.duracionCicloMs = duracionCicloMs;
     }
 
-    /** Configuración por defecto: 2 computadores, 2048 MB, FCFS, quantum 3, latencia 2, ciclo 1000 ms. */
+    /** Configuración por defecto: un computador, 2048 MB, FCFS, quantum 3, latencia 2, ciclo 1000 ms. */
     public static ConfiguracionInicial porDefecto() {
         return new ConfiguracionInicial(
-                new int[]{2048, 2048},
-                new PoliticaPlanificacion[]{PoliticaPlanificacion.FCFS, PoliticaPlanificacion.FCFS},
-                new int[]{3, 3}, 2, 1000);
+                new int[]{2048},
+                new PoliticaPlanificacion[]{PoliticaPlanificacion.FCFS},
+                new int[]{3}, 2, 1000);
     }
 
     /** Crea el clúster y aplica a cada computador su política, quantum, y los parámetros globales. */
     public ClusterDistribuido crearCluster() {
-        ClusterDistribuido cluster = new ClusterDistribuido(ramMb);
+        ClusterDistribuido cluster = new ClusterDistribuido(ramMb, disco);
         cluster.setLatenciaRedCiclos(latenciaRedCiclos);
         cluster.getRelojGlobal().setDuracionCicloMs(duracionCicloMs);
         for (int i = 0; i < ramMb.length; i++) {

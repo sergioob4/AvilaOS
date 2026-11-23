@@ -1,6 +1,7 @@
 package avilaos.gui;
 
 import avilaos.enums.PoliticaPlanificacion;
+import avilaos.hardware.ConfiguracionDisco;
 import avilaos.sistema.ConfiguracionInicial;
 
 import javax.swing.BorderFactory;
@@ -41,6 +42,7 @@ public class DialogoConfiguracionInicial extends JDialog {
     private static final Color COLOR_MUTED = new Color(175, 190, 215);
     private static final Color COLOR_INPUT = new Color(24, 28, 36);
 
+    private final JSpinner bloques, swap, cabezal, velocidad;
     private final JSpinner spinCantidad;
     private final JSpinner spinLatencia;
     private final JSpinner spinCicloMs;
@@ -87,6 +89,16 @@ public class DialogoConfiguracionInicial extends JDialog {
                 + "–" + ConfiguracionInicial.MAX_COMPUTADORES + "):", spinCantidad);
         agregarFila(globales, "Latencia de red (ciclos):", spinLatencia);
         agregarFila(globales, "Duración del ciclo (ms):", spinCicloMs);
+
+        ConfiguracionDisco disco = inicial.getDisco();
+        bloques = crearSpinner(disco.bloques(), 1, 500, 1);
+        swap = crearSpinner(disco.swap(), 0, 499, 1);
+        cabezal = crearSpinner(disco.cabezal(), 0, 499, 1);
+        velocidad = crearSpinner(disco.velocidad(), 1, 500, 1);
+        agregarFila(globales, "Bloques del disco", bloques);
+        agregarFila(globales, "Bloques reservados para swap", swap);
+        agregarFila(globales, "Posición inicial del cabezal", cabezal);
+        agregarFila(globales, "Posiciones por ciclo", velocidad);
 
         panelComputadores = new JPanel();
         panelComputadores.setLayout(new BoxLayout(panelComputadores, BoxLayout.Y_AXIS));
@@ -219,7 +231,9 @@ public class DialogoConfiguracionInicial extends JDialog {
                 qua[i] = (Integer) leer(spinQuantum[i], "Quantum del computador " + (i + 1));
                 pol[i] = (PoliticaPlanificacion) comboPolitica[i].getSelectedItem();
             }
-            resultado = new ConfiguracionInicial(ram, pol, qua, latencia, cicloMs);
+            ConfiguracionDisco disco = new ConfiguracionDisco((int) leer(bloques, "Bloques"),
+                    (int) leer(swap, "Swap"), (int) leer(cabezal, "Cabezal"), (int) leer(velocidad, "Velocidad"));
+            resultado = new ConfiguracionInicial(ram, pol, qua, latencia, cicloMs, disco);
             dispose();
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Dato inválido", JOptionPane.WARNING_MESSAGE);

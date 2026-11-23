@@ -36,6 +36,7 @@ import java.util.Date;
  */
 public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
+    private PanelDisco panelDisco;
     private final ClusterDistribuido cluster;
     private final RelojGlobal reloj;
 
@@ -290,10 +291,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         btnGuardar.addActionListener(e -> guardarEscenarioCsv());
         btnCargar.addActionListener(e -> cargarEscenarioCsv());
 
-        btnCargarPrueba.addActionListener(e -> {
-            inyectarCargaPrueba();
-            agregarLogEvento("Carga de prueba inyectada exitosamente en el clúster.", COLOR_MORADO);
-        });
+        btnCargarPrueba.addActionListener(e -> inyectarCargaPrueba());
 
         panelAcciones.add(btnNuevoProceso);
         panelAcciones.add(btnNuevoBuffer);
@@ -416,6 +414,9 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         JScrollPane scrollBuffers = crearScrollLog(logBuffers);
         tabbedLogs.addTab("Buffers y Semáforos", scrollBuffers);
 
+        panelDisco = new PanelDisco(cluster.getComputadores().obtener(0).getDisco());
+        tabbedLogs.insertTab("Disco local", null, panelDisco, null, 0);
+        tabbedLogs.setSelectedComponent(panelDisco);
         contenedor.add(tabbedLogs, BorderLayout.CENTER);
         return contenedor;
     }
@@ -566,7 +567,12 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      * la visualización del procesador, PC, prioridad y deadlines.
      */
     public void inyectarCargaPrueba() {
-        if (cluster.getCantidadComputadores() < 2) {
+        if (cluster.getCantidadComputadores() == 1) {
+            var disco = cluster.getComputadores().obtener(0).getDisco();
+            boolean cargado = avilaos.sistema.EscenarioDisco.cargar(disco);
+            agregarLogEvento(cargado ? "Ejemplo de disco cargado. Avance el reloj para observar la lectura."
+                    : "La demostración requiere un disco vacío.", COLOR_MORADO);
+            actualizarTodo();
             return;
         }
 
@@ -628,6 +634,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      * Refresca los datos en pantalla de todos los computadores y componentes globales.
      */
     public void actualizarTodo() {
+        panelDisco.actualizar();
         lblCicloGlobal.setText("  Ciclo Global: " + reloj.getCicloActual() + "  ");
 
         int total = listaPaneles.obtenerTamano();
@@ -1018,7 +1025,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         }
 
         SwingUtilities.invokeLater(() -> {
-            ClusterDistribuido cluster = new ClusterDistribuido(2, 2048);
+            ClusterDistribuido cluster = new ClusterDistribuido(1, 2048);
             VentanaPrincipal ventana = new VentanaPrincipal(cluster);
             ventana.setVisible(true);
 
