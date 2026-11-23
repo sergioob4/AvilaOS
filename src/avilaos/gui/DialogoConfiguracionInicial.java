@@ -2,6 +2,7 @@ package avilaos.gui;
 
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.hardware.ConfiguracionDisco;
+import avilaos.enums.PoliticaDisco;
 import avilaos.sistema.ConfiguracionInicial;
 
 import javax.swing.BorderFactory;
@@ -42,6 +43,7 @@ public class DialogoConfiguracionInicial extends JDialog {
     private static final Color COLOR_MUTED = new Color(175, 190, 215);
     private static final Color COLOR_INPUT = new Color(24, 28, 36);
 
+    private final JComboBox<PoliticaDisco> politicaDisco = new JComboBox<>(PoliticaDisco.values());
     private final JSpinner bloques, swap, cabezal, velocidad;
     private final JSpinner spinCantidad;
     private final JSpinner spinLatencia;
@@ -99,6 +101,10 @@ public class DialogoConfiguracionInicial extends JDialog {
         agregarFila(globales, "Bloques reservados para swap", swap);
         agregarFila(globales, "Posición inicial del cabezal", cabezal);
         agregarFila(globales, "Posiciones por ciclo", velocidad);
+        politicaDisco.setSelectedItem(disco.politica());
+        PanelComputador.estilizarComboBox(politicaDisco);
+        globales.add(etiqueta("Política inicial del disco", false));
+        globales.add(politicaDisco);
 
         panelComputadores = new JPanel();
         panelComputadores.setLayout(new BoxLayout(panelComputadores, BoxLayout.Y_AXIS));
@@ -232,7 +238,8 @@ public class DialogoConfiguracionInicial extends JDialog {
                 pol[i] = (PoliticaPlanificacion) comboPolitica[i].getSelectedItem();
             }
             ConfiguracionDisco disco = new ConfiguracionDisco((int) leer(bloques, "Bloques"),
-                    (int) leer(swap, "Swap"), (int) leer(cabezal, "Cabezal"), (int) leer(velocidad, "Velocidad"));
+                    (int) leer(swap, "Swap"), (int) leer(cabezal, "Cabezal"), (int) leer(velocidad, "Velocidad"),
+                    (PoliticaDisco) politicaDisco.getSelectedItem());
             resultado = new ConfiguracionInicial(ram, pol, qua, latencia, cicloMs, disco);
             dispose();
         } catch (IllegalArgumentException ex) {

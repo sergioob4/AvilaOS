@@ -16,9 +16,15 @@ public final class EscenarioDisco {
         }
         int cantidad = Math.min(4, datos);
         int inicio = disco.asignarArchivo("/ejemplo.txt", cantidad);
-        if (datos > cantidad) disco.asignarArchivo("/notas.txt", Math.min(3, datos - cantidad));
-        if (swap > 0) disco.asignarSwap("P-demo", Math.min(3, swap));
         disco.iniciarTransferencia(inicio, DiscoSimulado.Operacion.LECTURA);
+        if (swap > 0) {
+            int proceso = disco.asignarSwap("P-demo", Math.min(3, swap));
+            disco.iniciarTransferencia(proceso, DiscoSimulado.Operacion.ESCRITURA);
+        }
+        if (datos > cantidad) {
+            int notas = disco.asignarArchivo("/notas.txt", Math.min(3, datos - cantidad));
+            disco.iniciarTransferencia(notas, DiscoSimulado.Operacion.LECTURA);
+        }
         return true;
     }
 }
