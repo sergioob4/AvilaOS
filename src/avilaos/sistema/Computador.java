@@ -56,12 +56,12 @@ public class Computador implements IComponenteReloj {
     }
 
     public Computador(String id, String nombre, int tamanoRamMb, ConfiguracionDisco configDisco) {
-        disco = new DiscoSimulado(configDisco);
         this.id = id;
         this.nombre = nombre;
         this.cpu = new CPU("CPU-" + id);
         this.memoria = new MemoriaPrincipal(tamanoRamMb);
         this.so = new SistemaOperativo(id, this.cpu, this.memoria);
+        disco = new DiscoSimulado(configDisco, so::registrarEvento);
     }
 
     // -------------------------------------------------------------------------
