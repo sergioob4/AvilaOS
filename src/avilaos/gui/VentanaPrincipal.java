@@ -568,10 +568,9 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      */
     public void inyectarCargaPrueba() {
         if (cluster.getCantidadComputadores() == 1) {
-            var disco = cluster.getComputadores().obtener(0).getDisco();
-            boolean cargado = avilaos.sistema.EscenarioDisco.cargar(disco);
+            boolean cargado = avilaos.sistema.EscenarioDisco.cargar(cluster.getComputadores().obtener(0));
             agregarLogEvento(cargado ? "Ejemplo de disco cargado. Avance el reloj para observar la lectura."
-                    : "La demostración requiere un disco vacío.", COLOR_MORADO);
+                    : "La demostración requiere un disco vacío y las rutas de ejemplo disponibles.", COLOR_MORADO);
             actualizarTodo();
             return;
         }

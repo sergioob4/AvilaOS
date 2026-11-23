@@ -8,6 +8,7 @@ import avilaos.hardware.MemoriaPrincipal;
 import avilaos.interfaces.IComponenteReloj;
 import avilaos.interfaces.IPoliticaPlanificacion;
 import avilaos.proceso.Proceso;
+import avilaos.sistemaarchivos.SistemaArchivos;
 
 /**
  * Representa una máquina o nodo del clúster distribuido en ÁvilaOS.
@@ -33,6 +34,11 @@ public class Computador implements IComponenteReloj {
     /** Unidad Central de Procesamiento propia de la máquina. */
     private final CPU cpu;
     private final DiscoSimulado disco;
+    private final SistemaArchivos sistemaArchivos;
+
+    public SistemaArchivos getSistemaArchivos() {
+        return sistemaArchivos;
+    }
 
     public DiscoSimulado getDisco() {
         return disco;
@@ -62,6 +68,7 @@ public class Computador implements IComponenteReloj {
         this.memoria = new MemoriaPrincipal(tamanoRamMb);
         this.so = new SistemaOperativo(id, this.cpu, this.memoria);
         disco = new DiscoSimulado(configDisco, so::registrarEvento);
+        sistemaArchivos = new SistemaArchivos(disco);
     }
 
     // -------------------------------------------------------------------------
