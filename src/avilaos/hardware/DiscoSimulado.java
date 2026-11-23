@@ -69,6 +69,12 @@ public final class DiscoSimulado implements IComponenteReloj {
                     bloques[bloque.numero()] = new Bloque(bloque.numero(), false, destino, bloque.siguiente());
                 }
             }
+            if (activa != null) activa = conOcupanteActual(activa);
+            for (int i = 0; i < cola.obtenerTamano(); i++) {
+                SolicitudDisco solicitud = cola.obtener(i);
+                SolicitudDisco actualizada = conOcupanteActual(solicitud);
+                if (actualizada != solicitud) cola.reemplazar(i, actualizada);
+            }
         } finally {
             mutex.release();
         }
@@ -76,6 +82,12 @@ public final class DiscoSimulado implements IComponenteReloj {
 
     public int asignarSwap(String proceso, int unidadesRam) {
         return asignar(proceso, unidadesRam, true);
+    }
+
+    private SolicitudDisco conOcupanteActual(SolicitudDisco solicitud) {
+        String ocupante = bloques[solicitud.inicio()].ocupante();
+        if (solicitud.ocupante().equals(ocupante)) return solicitud;
+        return new SolicitudDisco(solicitud.id(), solicitud.inicio(), solicitud.operacion(), ocupante);
     }
 
     private int asignar(String ocupante, int cantidad, boolean swap) {
