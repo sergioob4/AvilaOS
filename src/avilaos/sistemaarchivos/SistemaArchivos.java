@@ -3,6 +3,8 @@ package avilaos.sistemaarchivos;
 import avilaos.enums.ModoUsuario;
 import avilaos.enums.Permiso;
 import avilaos.estructuras.ListaEnlazada;
+import avilaos.hardware.ConfiguracionDisco;
+import avilaos.hardware.DiscoSimulado;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -23,8 +25,17 @@ public class SistemaArchivos {
 
     private final Directorio raiz;
     private final Semaphore mutex;
+    private final DiscoSimulado disco;
 
     public SistemaArchivos() {
+        this(new DiscoSimulado(ConfiguracionDisco.PREDETERMINADA));
+    }
+
+    public SistemaArchivos(DiscoSimulado disco) {
+        if (disco == null) {
+            throw new IllegalArgumentException("El sistema de archivos requiere un disco.");
+        }
+        this.disco = disco;
         this.raiz = Directorio.crearRaiz(ADMINISTRADOR);
         this.mutex = new Semaphore(1, true);
     }
@@ -125,6 +136,26 @@ public class SistemaArchivos {
             Directorio nuevo = new Directorio(nombre, dueno, permiso);
             padre.agregarHijo(nuevo);
             return nuevo;
+        } finally {
+            liberar();
+        }
+    }
+
+    /** Registra un archivo y reserva su cadena de bloques en el disco asociado al árbol. */
+    public Archivo crearArchivo(String rutaPadre, String nombre, String dueno, Permiso permiso,
+                                int tamanoBloques, String procesoCreador) {
+        adquirir();
+        try {
+            Directorio padre = directorioExistente(rutaPadre);
+            Archivo archivo = new Archivo(nombre, dueno, permiso, tamanoBloques, procesoCreador);
+            padre.agregarHijo(archivo);
+            try {
+                archivo.setPrimerBloque(disco.asignarArchivo(archivo.getRuta(), tamanoBloques));
+            } catch (RuntimeException fallo) {
+                padre.quitarHijo(archivo);
+                throw fallo;
+            }
+            return archivo;
         } finally {
             liberar();
         }
