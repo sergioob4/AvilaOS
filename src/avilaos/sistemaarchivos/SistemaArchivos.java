@@ -129,7 +129,9 @@ public class SistemaArchivos {
      * @throws IllegalArgumentException si la ruta padre no existe o no es un directorio
      * @throws IllegalStateException si ya existe un elemento con ese nombre
      */
-    public Directorio crearDirectorio(String rutaPadre, String nombre, String dueno, Permiso permiso) {
+    public Directorio crearDirectorio(String rutaPadre, String nombre, String dueno, Permiso permiso,
+                                      ModoUsuario modo) {
+        exigirAdministrador(modo);
         adquirir();
         try {
             Directorio padre = directorioExistente(rutaPadre);
@@ -143,7 +145,8 @@ public class SistemaArchivos {
 
     /** Registra un archivo y reserva su cadena de bloques en el disco asociado al árbol. */
     public Archivo crearArchivo(String rutaPadre, String nombre, String dueno, Permiso permiso,
-                                int tamanoBloques, String procesoCreador) {
+                                int tamanoBloques, String procesoCreador, ModoUsuario modo) {
+        exigirAdministrador(modo);
         adquirir();
         try {
             Directorio padre = directorioExistente(rutaPadre);
@@ -163,9 +166,7 @@ public class SistemaArchivos {
 
     /** Elimina un archivo en modo administrador una vez que el disco permite liberar su cadena. */
     public void eliminarArchivo(String ruta, ModoUsuario modo) {
-        if (modo != ModoUsuario.ADMINISTRADOR) {
-            throw new SecurityException("Se requiere el modo administrador para eliminar archivos.");
-        }
+        exigirAdministrador(modo);
         adquirir();
         try {
             if (!(nodoExistente(ruta) instanceof Archivo archivo)) {
@@ -181,9 +182,7 @@ public class SistemaArchivos {
 
     /** Elimina el subárbol solo cuando se pueden liberar todas sus cadenas. */
     public void eliminarDirectorio(String ruta, ModoUsuario modo) {
-        if (modo != ModoUsuario.ADMINISTRADOR) {
-            throw new SecurityException("Se requiere el modo administrador para eliminar directorios.");
-        }
+        exigirAdministrador(modo);
         adquirir();
         try {
             Directorio directorio = directorioExistente(ruta);
@@ -215,7 +214,8 @@ public class SistemaArchivos {
      * @throws IllegalArgumentException si la ruta no existe, es la raíz o el nombre es inválido
      * @throws IllegalStateException si ya existe un elemento con ese nombre en el mismo directorio
      */
-    public void renombrar(String ruta, String nuevoNombre) {
+    public void renombrar(String ruta, String nuevoNombre, ModoUsuario modo) {
+        exigirAdministrador(modo);
         adquirir();
         try {
             NodoSistemaArchivos nodo = nodoExistente(ruta);
@@ -237,8 +237,14 @@ public class SistemaArchivos {
     }
 
     // -------------------------------------------------------------------------
-    // Auxiliares (se llaman con el semáforo ya adquirido)
+    // Auxiliares
     // -------------------------------------------------------------------------
+
+    private static void exigirAdministrador(ModoUsuario modo) {
+        if (modo != ModoUsuario.ADMINISTRADOR) {
+            throw new SecurityException("Se requiere el modo administrador para modificar el sistema de archivos.");
+        }
+    }
 
     private NodoSistemaArchivos buscarSinBloqueo(String ruta) {
         if (ruta == null || !ruta.startsWith(NodoSistemaArchivos.SEPARADOR)) {
