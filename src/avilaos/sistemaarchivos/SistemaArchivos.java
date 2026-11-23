@@ -161,6 +161,24 @@ public class SistemaArchivos {
         }
     }
 
+    /** Elimina un archivo en modo administrador una vez que el disco permite liberar su cadena. */
+    public void eliminarArchivo(String ruta, ModoUsuario modo) {
+        if (modo != ModoUsuario.ADMINISTRADOR) {
+            throw new SecurityException("Se requiere el modo administrador para eliminar archivos.");
+        }
+        adquirir();
+        try {
+            if (!(nodoExistente(ruta) instanceof Archivo archivo)) {
+                throw new IllegalArgumentException(ruta + " no es un archivo.");
+            }
+            disco.liberar(archivo.getPrimerBloque());
+            archivo.getPadre().quitarHijo(archivo);
+            archivo.setPrimerBloque(Archivo.SIN_BLOQUES);
+        } finally {
+            liberar();
+        }
+    }
+
     /**
      * Cambia el nombre de un archivo o directorio. Las rutas de su contenido cambian solas
      * porque se calculan a partir de los padres.
