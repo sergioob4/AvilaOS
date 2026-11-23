@@ -18,6 +18,8 @@ final class PanelDisco extends JPanel {
     private final JLabel activa = new JLabel();
     private final JTabbedPane vistas = new JTabbedPane();
     private int seleccionado = -1;
+    private static final Color SWAP_LIBRE = new Color(190, 132, 255);
+    private static final Color TEXTO_SWAP_LIBRE = new Color(29, 11, 49);
     private static final Border CABEZAL = BorderFactory.createLineBorder(new Color(255, 194, 60), 3);
     private static final Border NORMAL = BorderFactory.createEmptyBorder(3, 3, 3, 3);
 
@@ -29,6 +31,7 @@ final class PanelDisco extends JPanel {
         for (int i = 0; i < celdas.length; i++) {
             final int numero = i;
             JButton boton = new JButton(String.valueOf(i));
+            boton.setContentAreaFilled(false);
             boton.setOpaque(true);
             boton.setForeground(Color.WHITE);
             boton.setPreferredSize(new Dimension(52, 27));
@@ -65,7 +68,7 @@ final class PanelDisco extends JPanel {
         for (DiscoSimulado.Bloque b : vista.bloques()) {
             JButton celda = celdas[b.numero()];
             String uso = b.swap() ? "Swap libre" : "Libre";
-            Color color = b.swap() ? new Color(99, 77, 130) : new Color(65, 77, 91);
+            Color color = b.swap() ? SWAP_LIBRE : new Color(65, 77, 91);
             if (b.ocupante() != null) {
                 uso = (b.swap() ? "Proceso " : "Archivo ") + b.ocupante()
                         + (b.siguiente() >= 0 ? " → " + b.siguiente() : " · Fin de cadena");
@@ -73,6 +76,7 @@ final class PanelDisco extends JPanel {
             }
             String texto = "Bloque " + b.numero() + " · " + uso;
             celda.setBackground(color);
+            celda.setForeground(b.swap() && b.ocupante() == null ? TEXTO_SWAP_LIBRE : Color.WHITE);
             celda.setBorder(b.numero() == vista.cabezal() ? CABEZAL : NORMAL);
             celda.setToolTipText(texto);
             if (seleccionado == b.numero()) detalle.setText(texto);
