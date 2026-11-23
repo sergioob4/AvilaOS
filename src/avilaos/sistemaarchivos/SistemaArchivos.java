@@ -145,12 +145,18 @@ public class SistemaArchivos {
 
     /** Registra un archivo y reserva su cadena de bloques en el disco asociado al árbol. */
     public Archivo crearArchivo(String rutaPadre, String nombre, String dueno, Permiso permiso,
-                                int tamanoBloques, String procesoCreador, ModoUsuario modo) {
-        exigirAdministrador(modo);
+                                int tamanoBloques, String procesoCreador, String usuario, ModoUsuario modo) {
+        if (modo == null || usuario == null || usuario.isBlank()) {
+            throw new IllegalArgumentException("La creación requiere un usuario y un modo.");
+        }
         adquirir();
         try {
             Directorio padre = directorioExistente(rutaPadre);
             Archivo archivo = new Archivo(nombre, dueno, permiso, tamanoBloques, procesoCreador);
+            if (!modo.esAdministrador() && (!padre.getDueno().equals(usuario.trim())
+                    || !archivo.getDueno().equals(usuario.trim()))) {
+                throw new SecurityException("Solo puede crear archivos propios dentro de sus directorios.");
+            }
             padre.agregarHijo(archivo);
             try {
                 archivo.setPrimerBloque(disco.asignarArchivo(archivo.getRuta(), tamanoBloques));

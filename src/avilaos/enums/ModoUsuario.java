@@ -6,7 +6,7 @@ package avilaos.enums;
  * <ul>
  *   <li>{@link #ADMINISTRADOR}: puede crear, modificar y eliminar archivos y directorios,
  *       gestionar procesos, cambiar políticas y ver toda la información del disco.</li>
- *   <li>{@link #USUARIO}: solo lee archivos propios o públicos y crea procesos de E/S
+ *   <li>{@link #USUARIO}: crea archivos en sus directorios, lee archivos propios o públicos y crea procesos de E/S
  *       sobre sus propios archivos.</li>
  * </ul>
  */
