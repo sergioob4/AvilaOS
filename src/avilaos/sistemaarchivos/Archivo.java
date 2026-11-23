@@ -54,6 +54,12 @@ public class Archivo extends NodoSistemaArchivos {
         return procesoCreador == null ? "Carga inicial" : procesoCreador;
     }
 
+    Archivo copiar() {
+        Archivo copia = new Archivo(getNombre(), getDueno(), getPermiso(), tamanoBloques, procesoCreador);
+        copia.primerBloque = primerBloque;
+        return copia;
+    }
+
     void setPrimerBloque(int primerBloque) {
         this.primerBloque = primerBloque;
     }

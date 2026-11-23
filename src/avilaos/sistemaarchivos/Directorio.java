@@ -30,6 +30,20 @@ public class Directorio extends NodoSistemaArchivos {
         return new Directorio(dueno);
     }
 
+    /** Copia el subárbol mientras SistemaArchivos mantiene su semáforo. */
+    Directorio copiar() {
+        Directorio copia = getPadre() == null ? crearRaiz(getDueno())
+                : new Directorio(getNombre(), getDueno(), getPermiso());
+        int total = getCantidadHijos();
+        for (int i = 0; i < total; i++) {
+            NodoSistemaArchivos hijo = getHijo(i);
+            NodoSistemaArchivos nuevo = hijo instanceof Directorio dir ? dir.copiar() : ((Archivo) hijo).copiar();
+            nuevo.setPadre(copia);
+            copia.hijos.agregar(nuevo);
+        }
+        return copia;
+    }
+
     @Override
     public TipoNodo getTipo() {
         return TipoNodo.DIRECTORIO;

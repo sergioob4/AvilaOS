@@ -42,11 +42,7 @@ public class ListaEnlazada<T> {
     // -------------------------------------------------------------------------
 
     private void adquirir() {
-        try {
-            mutex.acquire();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        mutex.acquireUninterruptibly();
     }
 
     private void liberar() {

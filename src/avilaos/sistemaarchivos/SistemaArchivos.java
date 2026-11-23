@@ -57,8 +57,14 @@ public class SistemaArchivos {
     // Consultas
     // -------------------------------------------------------------------------
 
+    /** Raíz de una copia estable que se puede recorrer fuera del hilo del SO. */
     public Directorio getRaiz() {
-        return raiz;
+        adquirir();
+        try {
+            return raiz.copiar();
+        } finally {
+            liberar();
+        }
     }
 
     /**
@@ -68,12 +74,7 @@ public class SistemaArchivos {
      * @return el nodo o {@code null} si no existe
      */
     public NodoSistemaArchivos buscar(String ruta) {
-        adquirir();
-        try {
-            return buscarSinBloqueo(ruta);
-        } finally {
-            liberar();
-        }
+        return buscarDesde(getRaiz(), ruta);
     }
 
     /**
@@ -105,14 +106,9 @@ public class SistemaArchivos {
 
     /** @return todos los archivos del árbol en recorrido en profundidad (para la tabla de asignación) */
     public ListaEnlazada<Archivo> listarArchivos() {
-        adquirir();
-        try {
-            ListaEnlazada<Archivo> resultado = new ListaEnlazada<>();
-            recolectarArchivos(raiz, resultado);
-            return resultado;
-        } finally {
-            liberar();
-        }
+        ListaEnlazada<Archivo> resultado = new ListaEnlazada<>();
+        recolectarArchivos(getRaiz(), resultado);
+        return resultado;
     }
 
     // -------------------------------------------------------------------------
@@ -138,7 +134,7 @@ public class SistemaArchivos {
             Directorio padre = directorioExistente(rutaPadre);
             Directorio nuevo = new Directorio(nombre, dueno, permiso);
             padre.agregarHijo(nuevo);
-            return nuevo;
+            return (Directorio) buscarDesde(raiz.copiar(), nuevo.getRuta());
         } finally {
             liberar();
         }
@@ -165,7 +161,7 @@ public class SistemaArchivos {
                 padre.quitarHijo(archivo);
                 throw fallo;
             }
-            return archivo;
+            return (Archivo) buscarDesde(raiz.copiar(), archivo.getRuta());
         } finally {
             liberar();
         }
@@ -253,11 +249,11 @@ public class SistemaArchivos {
         }
     }
 
-    private NodoSistemaArchivos buscarSinBloqueo(String ruta) {
+    private NodoSistemaArchivos buscarDesde(Directorio origen, String ruta) {
         if (ruta == null || !ruta.startsWith(NodoSistemaArchivos.SEPARADOR)) {
             return null;
         }
-        NodoSistemaArchivos actual = raiz;
+        NodoSistemaArchivos actual = origen;
         String[] partes = ruta.split(NodoSistemaArchivos.SEPARADOR);
         for (String parte : partes) {
             if (parte.isEmpty()) {
@@ -275,7 +271,7 @@ public class SistemaArchivos {
     }
 
     private NodoSistemaArchivos nodoExistente(String ruta) {
-        NodoSistemaArchivos nodo = buscarSinBloqueo(ruta);
+        NodoSistemaArchivos nodo = buscarDesde(raiz, ruta);
         if (nodo == null) {
             throw new IllegalArgumentException("No existe la ruta " + ruta + ".");
         }
