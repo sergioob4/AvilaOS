@@ -49,6 +49,31 @@ public final class DiscoSimulado implements IComponenteReloj {
         return asignar(ruta, cantidad, false);
     }
 
+    /** Actualiza las etiquetas del mapa al renombrar un archivo o un directorio hermano. */
+    public void renombrarRuta(String anterior, String nueva) {
+        if (anterior.equals(nueva)) return;
+        String prefijoAnterior = anterior + "/";
+        String prefijoNuevo = nueva + "/";
+        mutex.acquireUninterruptibly();
+        try {
+            for (Bloque bloque : bloques) {
+                String ruta = bloque.ocupante();
+                if (!bloque.swap() && ruta != null && (ruta.equals(nueva) || ruta.startsWith(prefijoNuevo))) {
+                    throw new IllegalStateException("El destino ya tiene bloques asignados: " + nueva);
+                }
+            }
+            for (Bloque bloque : bloques) {
+                String ruta = bloque.ocupante();
+                if (!bloque.swap() && ruta != null && (ruta.equals(anterior) || ruta.startsWith(prefijoAnterior))) {
+                    String destino = nueva + ruta.substring(anterior.length());
+                    bloques[bloque.numero()] = new Bloque(bloque.numero(), false, destino, bloque.siguiente());
+                }
+            }
+        } finally {
+            mutex.release();
+        }
+    }
+
     public int asignarSwap(String proceso, int unidadesRam) {
         return asignar(proceso, unidadesRam, true);
     }

@@ -182,6 +182,9 @@ public class SistemaArchivos {
             if (existente != null && existente != nodo) {
                 throw new IllegalStateException("Ya existe \"" + limpio + "\" en " + nodo.getPadre().getRuta() + ".");
             }
+            String anterior = nodo.getRuta();
+            String nueva = anterior.substring(0, anterior.lastIndexOf('/') + 1) + limpio;
+            disco.renombrarRuta(anterior, nueva);
             nodo.setNombre(limpio);
         } finally {
             liberar();
