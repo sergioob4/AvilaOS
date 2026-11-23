@@ -1,5 +1,7 @@
 package avilaos.sistema;
 
+import avilaos.hardware.ConfiguracionDisco;
+
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.estructuras.Cola;
 import avilaos.hardware.RelojGlobal;
@@ -53,9 +55,13 @@ public class ClusterDistribuido {
      * @param ramPorComputadorMb RAM en MB de cada computador (longitud = cantidad, mínimo 2)
      */
     public ClusterDistribuido(int[] ramPorComputadorMb) {
+        this(ramPorComputadorMb, ConfiguracionDisco.PREDETERMINADA);
+    }
+
+    public ClusterDistribuido(int[] ramPorComputadorMb, ConfiguracionDisco configDisco) {
         int cantidadComputadores = ramPorComputadorMb.length;
-        if (cantidadComputadores < 2) {
-            throw new IllegalArgumentException("El sistema debe simular como mínimo 2 computadores.");
+        if (cantidadComputadores < 1) {
+            throw new IllegalArgumentException("El sistema debe simular como mínimo un computador.");
         }
 
         this.relojGlobal = new RelojGlobal();
@@ -66,7 +72,7 @@ public class ClusterDistribuido {
         this.relojGlobal.registrarComponente(this.gestorSincronizacion);
 
         for (int i = 1; i <= cantidadComputadores; i++) {
-            Computador comp = new Computador("C" + i, "Computador " + i, ramPorComputadorMb[i - 1]);
+            Computador comp = new Computador("C" + i, "Computador " + i, ramPorComputadorMb[i - 1], configDisco);
             comp.getSo().setGestorSincronizacion(this.gestorSincronizacion);
             computadores.agregar(comp);
             relojGlobal.registrarComponente(comp);

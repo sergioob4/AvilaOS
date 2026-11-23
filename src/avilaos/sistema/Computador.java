@@ -1,7 +1,9 @@
 package avilaos.sistema;
 
 import avilaos.enums.PoliticaPlanificacion;
+import avilaos.hardware.ConfiguracionDisco;
 import avilaos.hardware.CPU;
+import avilaos.hardware.DiscoSimulado;
 import avilaos.hardware.MemoriaPrincipal;
 import avilaos.interfaces.IComponenteReloj;
 import avilaos.interfaces.IPoliticaPlanificacion;
@@ -30,6 +32,11 @@ public class Computador implements IComponenteReloj {
 
     /** Unidad Central de Procesamiento propia de la máquina. */
     private final CPU cpu;
+    private final DiscoSimulado disco;
+
+    public DiscoSimulado getDisco() {
+        return disco;
+    }
 
     /** Memoria Principal (RAM) propia de la máquina. */
     private final MemoriaPrincipal memoria;
@@ -45,6 +52,11 @@ public class Computador implements IComponenteReloj {
      * @param tamanoRamMb tamaño total de la memoria RAM en megabytes
      */
     public Computador(String id, String nombre, int tamanoRamMb) {
+        this(id, nombre, tamanoRamMb, ConfiguracionDisco.PREDETERMINADA);
+    }
+
+    public Computador(String id, String nombre, int tamanoRamMb, ConfiguracionDisco configDisco) {
+        disco = new DiscoSimulado(configDisco);
         this.id = id;
         this.nombre = nombre;
         this.cpu = new CPU("CPU-" + id);
@@ -59,6 +71,7 @@ public class Computador implements IComponenteReloj {
     @Override
     public synchronized void ejecutarCiclo(long cicloActual) {
         // 1. La CPU ejecuta la instrucción correspondiente a este ciclo
+        disco.ejecutarCiclo(cicloActual);
         cpu.ejecutarCiclo(cicloActual);
 
         // 2. El Sistema Operativo ejecuta su ciclo: gestión de deadlines,
