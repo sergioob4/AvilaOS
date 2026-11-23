@@ -179,6 +179,33 @@ public class SistemaArchivos {
         }
     }
 
+    /** Elimina el subárbol solo cuando se pueden liberar todas sus cadenas. */
+    public void eliminarDirectorio(String ruta, ModoUsuario modo) {
+        if (modo != ModoUsuario.ADMINISTRADOR) {
+            throw new SecurityException("Se requiere el modo administrador para eliminar directorios.");
+        }
+        adquirir();
+        try {
+            Directorio directorio = directorioExistente(ruta);
+            if (directorio == raiz) {
+                throw new IllegalArgumentException("La raíz no puede eliminarse.");
+            }
+            ListaEnlazada<Archivo> archivos = new ListaEnlazada<>();
+            recolectarArchivos(directorio, archivos);
+            int[] inicios = new int[archivos.obtenerTamano()];
+            for (int i = 0; i < inicios.length; i++) {
+                inicios[i] = archivos.obtener(i).getPrimerBloque();
+            }
+            disco.liberarCadenas(inicios);
+            directorio.getPadre().quitarHijo(directorio);
+            for (int i = 0; i < inicios.length; i++) {
+                archivos.obtener(i).setPrimerBloque(Archivo.SIN_BLOQUES);
+            }
+        } finally {
+            liberar();
+        }
+    }
+
     /**
      * Cambia el nombre de un archivo o directorio. Las rutas de su contenido cambian solas
      * porque se calculan a partir de los padres.

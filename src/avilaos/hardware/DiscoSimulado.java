@@ -117,19 +117,29 @@ public final class DiscoSimulado implements IComponenteReloj {
     }
 
     public void liberar(int inicio) {
+        liberarCadenas(new int[]{inicio});
+    }
+
+    /** Valida el lote completo antes de liberar el primer bloque. */
+    public void liberarCadenas(int[] inicios) {
+        int[] cadenas = inicios.clone();
         mutex.acquireUninterruptibly();
         try {
-            validarInicio(inicio);
-            if (activa != null && activa.inicio() == inicio) {
-                throw new IllegalStateException("Transferencia en curso.");
+            for (int inicio : cadenas) {
+                validarInicio(inicio);
+                if (activa != null && activa.inicio() == inicio) {
+                    throw new IllegalStateException("Transferencia en curso.");
+                }
+                for (int i = 0; i < cola.obtenerTamano(); i++) {
+                    if (cola.obtener(i).inicio() == inicio) throw new IllegalStateException("Transferencia pendiente.");
+                }
             }
-            for (int i = 0; i < cola.obtenerTamano(); i++) {
-                if (cola.obtener(i).inicio() == inicio) throw new IllegalStateException("Transferencia pendiente.");
-            }
-            for (int i = inicio; i >= 0;) {
-                Bloque bloque = bloques[i];
-                bloques[i] = new Bloque(i, bloque.swap(), null, -1);
-                i = bloque.siguiente();
+            for (int inicio : cadenas) {
+                for (int i = inicio; i >= 0;) {
+                    Bloque bloque = bloques[i];
+                    bloques[i] = new Bloque(i, bloque.swap(), null, -1);
+                    i = bloque.siguiente();
+                }
             }
         } finally {
             mutex.release();
