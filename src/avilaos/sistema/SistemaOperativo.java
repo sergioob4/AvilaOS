@@ -14,6 +14,7 @@ import avilaos.interfaces.IPoliticaPlanificacion;
 import avilaos.planificacion.FabricaPoliticas;
 import avilaos.planificacion.PoliticaFCFS;
 import avilaos.proceso.PCB;
+import avilaos.proceso.PeticionArchivo;
 import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.GestorSincronizacion;
 
@@ -418,6 +419,15 @@ public class SistemaOperativo {
     // -------------------------------------------------------------------------
     // Creación y Bloqueo de Procesos
     // -------------------------------------------------------------------------
+
+    /** Parámetros de los procesos de archivo del escenario de ejemplo del proyecto. */
+    public synchronized Proceso crearProcesoArchivo(PeticionArchivo peticion, long cicloActual) {
+        if (peticion == null) throw new IllegalArgumentException("Indique una petición de archivo.");
+        String nombre = peticion.operacion() + " " + peticion.ruta();
+        Proceso proceso = new Proceso(nombre, idComputador, TipoProceso.IO_BOUND, 1, 16, 500, 2, peticion);
+        agregarProcesoNuevo(proceso, cicloActual);
+        return proceso;
+    }
 
     /**
      * Encola un nuevo proceso en la cola de nuevos del sistema operativo.

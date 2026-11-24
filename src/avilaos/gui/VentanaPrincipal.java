@@ -37,6 +37,7 @@ import java.util.Date;
 public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
     private PanelDisco panelDisco;
+    private PanelOperacionesArchivo panelArchivos;
     private final ClusterDistribuido cluster;
     private final RelojGlobal reloj;
 
@@ -416,6 +417,15 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
         panelDisco = new PanelDisco(cluster.getComputadores().obtener(0).getDisco());
         tabbedLogs.insertTab("Disco local", null, panelDisco, null, 0);
+        if (cluster.getCantidadComputadores() == 1) {
+            SistemaOperativo so = cluster.getComputadores().obtener(0).getSo();
+            panelArchivos = new PanelOperacionesArchivo(peticion -> {
+                Proceso creado = so.crearProcesoArchivo(peticion, reloj.getCicloActual());
+                actualizarTodo();
+                return creado;
+            });
+            tabbedLogs.insertTab("Operaciones de archivo", null, panelArchivos, null, 1);
+        }
         tabbedLogs.setSelectedComponent(panelDisco);
         contenedor.add(tabbedLogs, BorderLayout.CENTER);
         return contenedor;
@@ -634,6 +644,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      */
     public void actualizarTodo() {
         panelDisco.actualizar();
+        if (panelArchivos != null) panelArchivos.actualizar();
         lblCicloGlobal.setText("  Ciclo Global: " + reloj.getCicloActual() + "  ");
 
         int total = listaPaneles.obtenerTamano();
