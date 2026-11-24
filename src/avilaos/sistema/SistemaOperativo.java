@@ -3,7 +3,6 @@ package avilaos.sistema;
 import avilaos.enums.EstadoProceso;
 import avilaos.enums.ModoEjecucion;
 import avilaos.enums.MotivoBloqueo;
-import avilaos.enums.OperacionArchivo;
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
 import avilaos.estructuras.ListaEnlazada;
@@ -124,13 +123,20 @@ public class SistemaOperativo {
         }
 
         // 1. Supervisar deadlines de todos los procesos activos en el computador
-        supervisarDeadlines(cicloActual);
+        supervisarDeadlines(cicloActual, archivos);
         if (terminada != null) {
             for (int i = 0; i < colaBloqueados.obtenerTamano(); i++) {
                 Proceso proceso = colaBloqueados.obtener(i);
                 if (proceso.getMotivoBloqueo() == MotivoBloqueo.DISCO
                         && proceso.getPcb().getIdSolicitudDisco() == terminada.id()) {
-                    desbloquearProceso(proceso, cicloActual);
+                    try {
+                        archivos.completarOperacion(terminada.id());
+                        desbloquearProceso(proceso, cicloActual);
+                    } catch (IllegalStateException | IllegalArgumentException rechazo) {
+                        colaBloqueados.eliminarEn(i);
+                        proceso.terminarPorErrorArchivo(cicloActual, rechazo.getMessage());
+                        finalizarProceso(proceso, cicloActual);
+                    }
                     break;
                 }
             }
@@ -203,10 +209,10 @@ public class SistemaOperativo {
         var peticion = pcb.getPeticionArchivo();
         cpu.setModoEjecucion(ModoEjecucion.SISTEMA_OPERATIVO);
         try {
-            if (archivos == null || peticion.operacion() != OperacionArchivo.LEER) {
+            if (archivos == null) {
                 throw new IllegalStateException("Operación de archivo no disponible.");
             }
-            SolicitudDisco solicitud = archivos.solicitarLectura(peticion.ruta(), peticion.usuario(), peticion.modo());
+            SolicitudDisco solicitud = archivos.solicitarOperacion(peticion, proceso.getId());
             pcb.setIdSolicitudDisco(solicitud.id());
         } catch (IllegalArgumentException | IllegalStateException | SecurityException rechazo) {
             proceso.terminarPorErrorArchivo(cicloActual, rechazo.getMessage());
@@ -244,7 +250,7 @@ public class SistemaOperativo {
     // Supervisión de Deadlines (Requerimiento 2)
     // -------------------------------------------------------------------------
 
-    private void supervisarDeadlines(long cicloActual) {
+    private void supervisarDeadlines(long cicloActual, SistemaArchivos archivos) {
         // A) Proceso en CPU
         Proceso procesoCpu = cpu.getProcesoActual();
         if (procesoCpu != null && procesoCpu.getEstado() != EstadoProceso.TERMINADO) {
@@ -275,6 +281,9 @@ public class SistemaOperativo {
             if (p != null) {
                 boolean expiro = p.decrementarDeadline(cicloActual);
                 if (expiro) {
+                    if (archivos != null && p.getPcb().getIdSolicitudDisco() != 0) {
+                        archivos.cancelarOperacion(p.getPcb().getIdSolicitudDisco());
+                    }
                     colaBloqueados.eliminarEn(i);
                     finalizarProceso(p, cicloActual);
                 }

@@ -171,6 +171,26 @@ public final class DiscoSimulado implements IComponenteReloj {
         }
     }
 
+    /** Retira una transferencia cancelada sin alterar el recorrido ya realizado. */
+    public void cancelarTransferencia(long id) {
+        mutex.acquireUninterruptibly();
+        try {
+            if (activa != null && activa.id() == id) {
+                activa = null;
+                objetivo = -1;
+                return;
+            }
+            for (int i = 0; i < cola.obtenerTamano(); i++) {
+                if (cola.obtener(i).id() == id) {
+                    cola.eliminarEn(i);
+                    return;
+                }
+            }
+        } finally {
+            mutex.release();
+        }
+    }
+
     public void cambiarPolitica(PoliticaDisco nueva) {
         if (nueva == null) throw new IllegalArgumentException("Seleccione una política.");
         mutex.acquireUninterruptibly();

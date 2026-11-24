@@ -1,6 +1,8 @@
 package avilaos.sistemaarchivos;
 
 import avilaos.enums.ModoUsuario;
+import avilaos.enums.OperacionArchivo;
+import avilaos.proceso.PeticionArchivo;
 import avilaos.enums.Permiso;
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.hardware.ConfiguracionDisco;
@@ -27,6 +29,8 @@ public class SistemaArchivos {
     private final Directorio raiz;
     private final Semaphore mutex;
     private final DiscoSimulado disco;
+    private record Escritura(long id, PeticionArchivo peticion, Archivo archivo) {}
+    private final ListaEnlazada<Escritura> escrituras = new ListaEnlazada<>();
 
     public SistemaArchivos() {
         this(new DiscoSimulado(ConfiguracionDisco.PREDETERMINADA));
@@ -150,10 +154,7 @@ public class SistemaArchivos {
         try {
             Directorio padre = directorioExistente(rutaPadre);
             Archivo archivo = new Archivo(nombre, dueno, permiso, tamanoBloques, procesoCreador);
-            if (!modo.esAdministrador() && (!padre.getDueno().equals(usuario.trim())
-                    || !archivo.getDueno().equals(usuario.trim()))) {
-                throw new SecurityException("Solo puede crear archivos propios dentro de sus directorios.");
-            }
+            validarCreacion(padre, archivo, usuario, modo);
             padre.agregarHijo(archivo);
             try {
                 archivo.setPrimerBloque(disco.asignarArchivo(archivo.getRuta(), tamanoBloques));
@@ -175,9 +176,7 @@ public class SistemaArchivos {
             if (!(nodoExistente(ruta) instanceof Archivo archivo)) {
                 throw new IllegalArgumentException(ruta + " no es un archivo.");
             }
-            disco.liberar(archivo.getPrimerBloque());
-            archivo.getPadre().quitarHijo(archivo);
-            archivo.setPrimerBloque(Archivo.SIN_BLOQUES);
+            borrarArchivo(archivo);
         } finally {
             liberar();
         }
@@ -225,18 +224,130 @@ public class SistemaArchivos {
             if (nodo == raiz) {
                 throw new IllegalArgumentException("La raíz no puede renombrarse.");
             }
-            String limpio = NodoSistemaArchivos.validarNombre(nuevoNombre);
-            NodoSistemaArchivos existente = nodo.getPadre().buscarHijo(limpio);
-            if (existente != null && existente != nodo) {
-                throw new IllegalStateException("Ya existe \"" + limpio + "\" en " + nodo.getPadre().getRuta() + ".");
-            }
-            String anterior = nodo.getRuta();
-            String nueva = anterior.substring(0, anterior.lastIndexOf('/') + 1) + limpio;
-            disco.renombrarRuta(anterior, nueva);
-            nodo.setNombre(limpio);
+            renombrarNodo(nodo, nuevoNombre);
         } finally {
             liberar();
         }
+    }
+
+    private void renombrarNodo(NodoSistemaArchivos nodo, String nuevoNombre) {
+        String limpio = NodoSistemaArchivos.validarNombre(nuevoNombre);
+        NodoSistemaArchivos existente = nodo.getPadre().buscarHijo(limpio);
+        if (existente != null && existente != nodo) {
+            throw new IllegalStateException("Ya existe \"" + limpio + "\" en " + nodo.getPadre().getRuta() + ".");
+        }
+        String anterior = nodo.getRuta();
+        String nueva = anterior.substring(0, anterior.lastIndexOf('/') + 1) + limpio;
+        disco.renombrarRuta(anterior, nueva);
+        nodo.setNombre(limpio);
+    }
+
+    private void borrarArchivo(Archivo archivo) {
+        disco.liberar(archivo.getPrimerBloque());
+        archivo.getPadre().quitarHijo(archivo);
+        archivo.setPrimerBloque(Archivo.SIN_BLOQUES);
+    }
+
+    private static void validarCreacion(Directorio padre, Archivo archivo, String usuario, ModoUsuario modo) {
+        if (!modo.esAdministrador() && (!padre.getDueno().equals(usuario.trim())
+                || !archivo.getDueno().equals(usuario.trim()))) {
+            throw new SecurityException("Solo puede crear archivos propios dentro de sus directorios.");
+        }
+    }
+
+    /** La creación reserva su cadena; los cambios del árbol esperan la confirmación del disco. */
+    public SolicitudDisco solicitarOperacion(PeticionArchivo peticion, String proceso) {
+        if (peticion.operacion() == OperacionArchivo.LEER) {
+            return solicitarLectura(peticion.ruta(), peticion.usuario(), peticion.modo());
+        }
+        adquirir();
+        try {
+            Archivo archivo;
+            boolean crear = peticion.operacion() == OperacionArchivo.CREAR;
+            if (crear) {
+                archivo = reservarCreacion(peticion, proceso);
+            } else {
+                exigirAdministrador(peticion.modo());
+                if (!(nodoExistente(peticion.ruta()) instanceof Archivo destino)) {
+                    throw new IllegalArgumentException("La operación de E/S requiere un archivo.");
+                }
+                archivo = destino;
+            }
+            SolicitudDisco solicitud;
+            try {
+                solicitud = disco.iniciarTransferencia(archivo.getPrimerBloque(), DiscoSimulado.Operacion.ESCRITURA);
+            } catch (RuntimeException fallo) {
+                if (crear) disco.liberar(archivo.getPrimerBloque());
+                throw fallo;
+            }
+            escrituras.agregar(new Escritura(solicitud.id(), peticion, archivo));
+            return solicitud;
+        } finally {
+            liberar();
+        }
+    }
+
+    private Archivo reservarCreacion(PeticionArchivo peticion, String proceso) {
+        String ruta = peticion.ruta();
+        int separador = ruta.lastIndexOf('/');
+        Directorio padre = directorioExistente(separador == 0 ? "/" : ruta.substring(0, separador));
+        Archivo archivo = new Archivo(ruta.substring(separador + 1), peticion.usuario(), peticion.permiso(),
+                peticion.tamanoBloques(), proceso);
+        validarCreacion(padre, archivo, peticion.usuario(), peticion.modo());
+        if (padre.buscarHijo(archivo.getNombre()) != null) {
+            throw new IllegalStateException("Ya existe un elemento en " + ruta);
+        }
+        archivo.setPadre(padre);
+        archivo.setPrimerBloque(disco.asignarArchivo(archivo.getRuta(), archivo.getTamanoBloques()));
+        return archivo;
+    }
+
+    public void completarOperacion(long id) {
+        adquirir();
+        try {
+            Escritura escritura = retirarEscritura(id);
+            if (escritura == null) return;
+            Archivo archivo = escritura.archivo();
+            switch (escritura.peticion().operacion()) {
+                case CREAR -> {
+                    try {
+                        if (!archivo.estaDentroDe(raiz)) throw new IllegalStateException("El directorio fue eliminado.");
+                        archivo.getPadre().agregarHijo(archivo);
+                    } catch (RuntimeException fallo) {
+                        disco.liberar(archivo.getPrimerBloque());
+                        throw fallo;
+                    }
+                }
+                case ACTUALIZAR, ELIMINAR -> {
+                    if (!archivo.estaDentroDe(raiz)) throw new IllegalStateException("El archivo fue eliminado.");
+                    if (escritura.peticion().operacion() == OperacionArchivo.ELIMINAR) borrarArchivo(archivo);
+                    else renombrarNodo(archivo, escritura.peticion().nuevoNombre());
+                }
+                default -> throw new IllegalStateException("Operación de escritura inválida.");
+            }
+        } finally {
+            liberar();
+        }
+    }
+
+    public void cancelarOperacion(long id) {
+        adquirir();
+        try {
+            disco.cancelarTransferencia(id);
+            Escritura escritura = retirarEscritura(id);
+            if (escritura != null && escritura.peticion().operacion() == OperacionArchivo.CREAR) {
+                disco.liberar(escritura.archivo().getPrimerBloque());
+            }
+        } finally {
+            liberar();
+        }
+    }
+
+    private Escritura retirarEscritura(long id) {
+        for (int i = 0; i < escrituras.obtenerTamano(); i++) {
+            if (escrituras.obtener(i).id() == id) return escrituras.eliminarEn(i);
+        }
+        return null;
     }
 
     // -------------------------------------------------------------------------
