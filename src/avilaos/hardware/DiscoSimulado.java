@@ -183,16 +183,22 @@ public final class DiscoSimulado implements IComponenteReloj {
 
     @Override
     public void ejecutarCiclo(long cicloActual) {
+        avanzarTransferencia(cicloActual);
+    }
+
+    /** Devuelve la transferencia terminada en este pulso, si la hubo. */
+    public SolicitudDisco avanzarTransferencia(long cicloActual) {
         String evento = null;
+        SolicitudDisco terminada = null;
         mutex.acquireUninterruptibly();
         try {
             if (activa == null) {
-                if (cola.estaVacia()) return;
+                if (cola.estaVacia()) return null;
                 IPoliticaDisco.Decision decision = politica.elegir(cola, cabezal, bloques.length - 1, barridoAscendente);
                 if (decision.indice() < 0) {
                     if (decision.salto()) cabezal = decision.destino();
                     else moverHacia(decision.destino());
-                    return;
+                    return null;
                 }
                 activa = cola.eliminarEn(decision.indice());
                 objetivo = activa.inicio();
@@ -204,12 +210,16 @@ public final class DiscoSimulado implements IComponenteReloj {
                 moverHacia(objetivo);
             } else {
                 objetivo = bloques[cabezal].siguiente();
-                if (objetivo < 0) activa = null;
+                if (objetivo < 0) {
+                    terminada = activa;
+                    activa = null;
+                }
             }
         } finally {
             mutex.release();
         }
         if (evento != null) registrarEvento.accept(evento);
+        return terminada;
     }
 
     private void moverHacia(int destino) {

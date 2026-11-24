@@ -56,6 +56,8 @@ public class PCB {
     /** Clasificación del proceso según su carga o rol. */
     private final TipoProceso tipo;
     private final PeticionArchivo peticionArchivo;
+    private long idSolicitudDisco;
+    private String errorArchivo;
 
     // -------------------------------------------------------------------------
     // Planificación y Recursos
@@ -277,6 +279,23 @@ public class PCB {
 
     public PeticionArchivo getPeticionArchivo() {
         return peticionArchivo;
+    }
+
+    /** Cero hasta que el disco acepte la petición; se conserva tras el desbloqueo. */
+    public long getIdSolicitudDisco() {
+        return idSolicitudDisco;
+    }
+
+    public void setIdSolicitudDisco(long idSolicitudDisco) {
+        this.idSolicitudDisco = idSolicitudDisco;
+    }
+
+    public String getErrorArchivo() {
+        return errorArchivo;
+    }
+
+    void setErrorArchivo(String errorArchivo) {
+        this.errorArchivo = errorArchivo;
     }
 
     public TipoProceso getTipo() {

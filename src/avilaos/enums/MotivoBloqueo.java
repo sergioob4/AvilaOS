@@ -47,7 +47,8 @@ public enum MotivoBloqueo {
     /**
      * Proceso I/O-bound bloqueado esperando la finalización de una operación de E/S.
      */
-    ENTRADA_SALIDA("Entrada/Salida", "Esperando finalización de operación de E/S");
+    ENTRADA_SALIDA("Entrada/Salida", "Esperando finalización de operación de E/S"),
+    DISCO("E/S de disco", "Esperando la transferencia del archivo");
 
     // -------------------------------------------------------------------------
     // Atributos

@@ -85,6 +85,12 @@ public class Proceso {
             pcb.setCicloPrimeraEjecucion(cicloGlobal);
         }
 
+        // Al volver de una syscall que era la última instrucción solo queda salir.
+        if (pcb.getIdSolicitudDisco() != 0 && pcb.getTiempoRestanteEjecucion() == 0) {
+            terminarExitoso(cicloGlobal);
+            return true;
+        }
+
         // Incremento lineal de registros de hardware (PC y MAR)
         pcb.setProgramCounter(pcb.getProgramCounter() + 1);
         pcb.setMemoryAddressRegister(pcb.getMemoryAddressRegister() + 1);
@@ -95,7 +101,8 @@ public class Proceso {
         pcb.setTiempoRestanteEjecucion(Math.max(0, restante));
 
         // Si completó todas las instrucciones
-        if (pcb.getTiempoRestanteEjecucion() == 0) {
+        boolean debeSolicitarArchivo = pcb.getPeticionArchivo() != null && pcb.getIdSolicitudDisco() == 0;
+        if (pcb.getTiempoRestanteEjecucion() == 0 && !debeSolicitarArchivo) {
             terminarExitoso(cicloGlobal);
             return true;
         }
@@ -188,6 +195,13 @@ public class Proceso {
         pcb.setCicloTerminacion(cicloGlobal);
         pcb.setCumplioDeadline(true);
         pcb.setTerminoPorDeadline(false);
+    }
+
+    public void terminarPorErrorArchivo(long cicloGlobal, String mensaje) {
+        pcb.setErrorArchivo(mensaje);
+        pcb.setEstado(EstadoProceso.TERMINADO);
+        pcb.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+        pcb.setCicloTerminacion(cicloGlobal);
     }
 
     /**

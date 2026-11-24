@@ -78,12 +78,12 @@ public class Computador implements IComponenteReloj {
     @Override
     public synchronized void ejecutarCiclo(long cicloActual) {
         // 1. La CPU ejecuta la instrucción correspondiente a este ciclo
-        disco.ejecutarCiclo(cicloActual);
+        var transferenciaTerminada = disco.avanzarTransferencia(cicloActual);
         cpu.ejecutarCiclo(cicloActual);
 
         // 2. El Sistema Operativo ejecuta su ciclo: gestión de deadlines,
         //    liberación de recursos, planificación a largo y corto plazo
-        so.ejecutarCicloSO(cicloActual);
+        so.ejecutarCicloSO(cicloActual, sistemaArchivos, transferenciaTerminada);
     }
 
     // -------------------------------------------------------------------------

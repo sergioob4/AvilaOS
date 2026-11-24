@@ -3,11 +3,14 @@ package avilaos.sistema;
 import avilaos.enums.EstadoProceso;
 import avilaos.enums.ModoEjecucion;
 import avilaos.enums.MotivoBloqueo;
+import avilaos.enums.OperacionArchivo;
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.hardware.CPU;
 import avilaos.hardware.MemoriaPrincipal;
+import avilaos.hardware.SolicitudDisco;
+import avilaos.sistemaarchivos.SistemaArchivos;
 import avilaos.interfaces.IPoliticaPlanificacion;
 import avilaos.planificacion.FabricaPoliticas;
 import avilaos.planificacion.PoliticaFCFS;
@@ -109,6 +112,10 @@ public class SistemaOperativo {
      * @param cicloActual ciclo global de la simulación
      */
     public synchronized void ejecutarCicloSO(long cicloActual) {
+        ejecutarCicloSO(cicloActual, null, null);
+    }
+
+    synchronized void ejecutarCicloSO(long cicloActual, SistemaArchivos archivos, SolicitudDisco terminada) {
         // 0. Actualizar procesos bloqueados por tiempo (latencia de red y E/S)
         if (gestorSincronizacion != null) {
             gestorSincronizacion.actualizarBloqueadosPorTiempo(this, cicloActual);
@@ -118,6 +125,16 @@ public class SistemaOperativo {
 
         // 1. Supervisar deadlines de todos los procesos activos en el computador
         supervisarDeadlines(cicloActual);
+        if (terminada != null) {
+            for (int i = 0; i < colaBloqueados.obtenerTamano(); i++) {
+                Proceso proceso = colaBloqueados.obtener(i);
+                if (proceso.getMotivoBloqueo() == MotivoBloqueo.DISCO
+                        && proceso.getPcb().getIdSolicitudDisco() == terminada.id()) {
+                    desbloquearProceso(proceso, cicloActual);
+                    break;
+                }
+            }
+        }
 
         // 2. Coordinación de procesos en CPU según su tipo (Productor, Consumidor o I/O Bound)
         Proceso procesoCpu = cpu.getProcesoActual();
@@ -126,6 +143,10 @@ public class SistemaOperativo {
                     || procesoCpu.getPcb().getTipo() == TipoProceso.CONSUMIDOR) {
                 if (gestorSincronizacion != null) {
                     gestorSincronizacion.procesarCicloProductorConsumidor(procesoCpu, this, cicloActual);
+                }
+            } else if (procesoCpu.getPcb().getPeticionArchivo() != null) {
+                if (procesoCpu.getPcb().getIdSolicitudDisco() == 0) {
+                    solicitarArchivo(procesoCpu, archivos, cicloActual);
                 }
             } else if (procesoCpu.getPcb().getTipo() == TipoProceso.IO_BOUND) {
                 procesarCicloIOBound(procesoCpu, cicloActual);
@@ -175,6 +196,23 @@ public class SistemaOperativo {
                     + ") solicita E/S tras " + intervaloIO + " ciclos de CPU y pasa a BLOQUEADO ("
                     + duracionIO + " ciclos) en " + nombreComputador() + ".");
         }
+    }
+
+    private void solicitarArchivo(Proceso proceso, SistemaArchivos archivos, long cicloActual) {
+        PCB pcb = proceso.getPcb();
+        var peticion = pcb.getPeticionArchivo();
+        cpu.setModoEjecucion(ModoEjecucion.SISTEMA_OPERATIVO);
+        try {
+            if (archivos == null || peticion.operacion() != OperacionArchivo.LEER) {
+                throw new IllegalStateException("Operación de archivo no disponible.");
+            }
+            SolicitudDisco solicitud = archivos.solicitarLectura(peticion.ruta(), peticion.usuario(), peticion.modo());
+            pcb.setIdSolicitudDisco(solicitud.id());
+        } catch (IllegalArgumentException | IllegalStateException | SecurityException rechazo) {
+            proceso.terminarPorErrorArchivo(cicloActual, rechazo.getMessage());
+            return;
+        }
+        bloquearProceso(proceso, MotivoBloqueo.DISCO);
     }
 
     /**
@@ -273,6 +311,8 @@ public class SistemaOperativo {
             procesosTerminadosPorDeadline++;
             registrarEvento("Proceso " + p.getId() + " (" + p.getNombre()
                     + ") termina por vencimiento de deadline en " + nombreComputador() + ".");
+        } else if (p.getPcb().getErrorArchivo() != null) {
+            registrarEvento("Proceso " + p.getId() + ": " + p.getPcb().getErrorArchivo());
         } else {
             procesosCompletadosExitosos++;
             registrarEvento("Proceso " + p.getId() + " (" + p.getNombre()
