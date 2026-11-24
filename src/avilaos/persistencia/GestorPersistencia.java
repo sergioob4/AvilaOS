@@ -2,6 +2,10 @@ package avilaos.persistencia;
 
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
+import avilaos.enums.OperacionArchivo;
+import avilaos.enums.ModoUsuario;
+import avilaos.enums.Permiso;
+import avilaos.proceso.PeticionArchivo;
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.BufferAcotado;
@@ -127,7 +131,7 @@ public class GestorPersistencia {
 
             // 4. Procesos con atributos completos
             writer.write("# PROCESOS\n");
-            writer.write("nombre,computador,tipo,prioridad,memoria,deadline,instrucciones,idBuffer,ciclosPorItem,itemsRequeridos,ciclosEntreIO,duracionBloqueoIO\n");
+            writer.write("nombre,computador,tipo,prioridad,memoria,deadline,instrucciones,idBuffer,ciclosPorItem,itemsRequeridos,ciclosEntreIO,duracionBloqueoIO,peticionArchivo\n");
 
             ListaEnlazada<String> procesosExportados = new ListaEnlazada<>();
             for (int i = 0; i < totalComp; i++) {
@@ -171,12 +175,50 @@ public class GestorPersistencia {
 
     private static void escribirLineaProcesoCsv(FileWriter writer, Proceso p, String idComp) throws IOException {
         String idBuffer = p.getPcb().getIdBuffer() != null ? p.getPcb().getIdBuffer() : "";
-        writer.write(String.format("%s,%s,%s,%d,%d,%d,%d,%s,%d,%d,%d,%d\n",
-                p.getPcb().getNombre(), idComp, p.getPcb().getTipo().name(),
+        PeticionArchivo peticion = p.getPcb().getPeticionArchivo();
+        writer.write(String.format("%s,%s,%s,%d,%d,%d,%d,%s,%d,%d,%d,%d,%s\n",
+                celdaCsv(p.getPcb().getNombre()), celdaCsv(idComp), p.getPcb().getTipo().name(),
                 p.getPcb().getPrioridad(), p.getPcb().getMemoriaAsignada(),
                 p.getPcb().getDeadlineInicial(), p.getPcb().getTiempoEjecucionTotal(),
-                idBuffer, p.getPcb().getCiclosPorItem(), p.getPcb().getItemsRequeridos(),
-                p.getPcb().getCiclosEntreIO(), p.getPcb().getDuracionBloqueoIO()));
+                celdaCsv(idBuffer), p.getPcb().getCiclosPorItem(), p.getPcb().getItemsRequeridos(),
+                p.getPcb().getCiclosEntreIO(), p.getPcb().getDuracionBloqueoIO(),
+                peticion == null ? "" : celdaCsv(jsonPeticion(peticion))));
+    }
+
+    private static String celdaCsv(String texto) {
+        return "\"" + texto.replace("\"", "\"\"") + "\"";
+    }
+
+    private static String[] camposProcesoCsv(String linea, BufferedReader reader) throws IOException {
+        ListaEnlazada<String> campos = new ListaEnlazada<>();
+        StringBuilder campo = new StringBuilder();
+        boolean entreComillas = false;
+        while (true) {
+            for (int i = 0; i < linea.length(); i++) {
+                char c = linea.charAt(i);
+                if (c == '"' && (entreComillas || campo.isEmpty())) {
+                    if (entreComillas && i + 1 < linea.length() && linea.charAt(i + 1) == '"') {
+                        campo.append('"');
+                        i++;
+                    } else {
+                        entreComillas = !entreComillas;
+                    }
+                } else if (c == ',' && !entreComillas) {
+                    campos.agregar(campo.toString());
+                    campo.setLength(0);
+                } else {
+                    campo.append(c);
+                }
+            }
+            if (!entreComillas) break;
+            linea = reader.readLine();
+            if (linea == null) throw new IOException("Campo CSV sin comilla de cierre.");
+            campo.append('\n');
+        }
+        campos.agregar(campo.toString());
+        String[] resultado = new String[campos.obtenerTamano()];
+        for (int i = 0; i < resultado.length; i++) resultado[i] = campos.obtener(i);
+        return resultado;
     }
 
     /**
@@ -255,7 +297,7 @@ public class GestorPersistencia {
                     }
                     case "PROCESOS" -> {
                         if (linea.toLowerCase().startsWith("nombre,")) continue; // Cabecera
-                        String[] partes = linea.split(",");
+                        String[] partes = camposProcesoCsv(linea, reader);
                         if (partes.length >= 7) {
                             String nombre = partes[0].trim();
                             String idComp = partes[1].trim();
@@ -265,7 +307,9 @@ public class GestorPersistencia {
                             int deadline = Integer.parseInt(partes[5].trim());
                             int instrucciones = Integer.parseInt(partes[6].trim());
 
-                            Proceso p = new Proceso(nombre, idComp, tipo, prioridad, memoria, deadline, instrucciones);
+                            PeticionArchivo peticion = partes.length > 12 && !partes[12].isBlank()
+                                    ? leerPeticion(partes[12], tipo) : null;
+                            Proceso p = new Proceso(nombre, idComp, tipo, prioridad, memoria, deadline, instrucciones, peticion);
 
                             if (partes.length >= 12) {
                                 String idBuf = partes[7].trim();
@@ -401,7 +445,9 @@ public class GestorPersistencia {
 
     private static String generarJsonProceso(Proceso p, String idComp) {
         String idBuffer = p.getPcb().getIdBuffer() != null ? p.getPcb().getIdBuffer() : "";
+        PeticionArchivo peticion = p.getPcb().getPeticionArchivo();
         return "    {\n"
+                + (peticion == null ? "" : "      \"peticionArchivo\": " + jsonPeticion(peticion) + ",\n")
                 + "      \"nombre\": \"" + escaparJson(p.getPcb().getNombre()) + "\",\n"
                 + "      \"computador\": \"" + escaparJson(idComp) + "\",\n"
                 + "      \"tipo\": \"" + p.getPcb().getTipo().name() + "\",\n"
@@ -516,7 +562,8 @@ public class GestorPersistencia {
                     int deadline = !deadStr.isEmpty() ? Integer.parseInt(deadStr) : 20;
                     int inst = !instStr.isEmpty() ? Integer.parseInt(instStr) : 5;
 
-                    Proceso p = new Proceso(nombre, idComp, tipo, prio, mem, deadline, inst);
+                    Proceso p = new Proceso(nombre, idComp, tipo, prio, mem, deadline, inst,
+                            leerPeticion(ValidadorJson.miembro(pj, "peticionArchivo"), tipo));
 
                     String idBuf = extraerValorJson(pj, "idBuffer");
                     if (!idBuf.isEmpty()) {
@@ -612,7 +659,7 @@ public class GestorPersistencia {
                 validarTextoJson(objeto, "computador", false);
                 validarTextoJson(objeto, "idBuffer", false);
                 String tipo = extraerValorJson(objeto, "tipo");
-                if (!tipo.isEmpty()) TipoProceso.valueOf(tipo);
+                leerPeticion(ValidadorJson.miembro(objeto, "peticionArchivo"), TipoProceso.valueOf(tipo));
                 String[] campos = {"prioridad", "memoria", "deadline", "instrucciones",
                     "ciclosPorItem", "itemsRequeridos", "ciclosEntreIO", "duracionBloqueoIO"};
                 for (String campo : campos) validarEnteroJson(objeto, campo, false);
@@ -624,6 +671,35 @@ public class GestorPersistencia {
             }
         } catch (IllegalArgumentException e) {
             throw new IOException("Escenario JSON inválido: " + e.getMessage(), e);
+        }
+    }
+
+    private static String jsonPeticion(PeticionArchivo p) {
+        return "{\"operacion\":\"" + p.operacion() + "\",\"ruta\":\"" + escaparJson(p.ruta())
+                + "\",\"usuario\":\"" + escaparJson(p.usuario()) + "\",\"modo\":\"" + p.modo().name()
+                + "\",\"tamanoBloques\":" + p.tamanoBloques()
+                + (p.permiso() == null ? "" : ",\"permiso\":\"" + p.permiso().name() + "\"")
+                + (p.nuevoNombre() == null ? "" : ",\"nuevoNombre\":\"" + escaparJson(p.nuevoNombre()) + "\"") + "}";
+    }
+
+    private static PeticionArchivo leerPeticion(String json, TipoProceso tipo) throws IOException {
+        if (json == null) return null;
+        if (tipo != TipoProceso.IO_BOUND) throw new IOException("La petición de archivo requiere un proceso de E/S.");
+        ValidadorJson.validarObjeto(json);
+        for (String campo : new String[]{"operacion", "ruta", "usuario", "modo"}) validarTextoJson(json, campo, true);
+        validarTextoJson(json, "permiso", false);
+        validarTextoJson(json, "nuevoNombre", false);
+        validarEnteroJson(json, "tamanoBloques", false);
+        String permiso = extraerValorJson(json, "permiso");
+        String tamano = extraerValorJson(json, "tamanoBloques");
+        String nombre = extraerValorJson(json, "nuevoNombre");
+        try {
+            return new PeticionArchivo(OperacionArchivo.valueOf(extraerValorJson(json, "operacion")),
+                    extraerValorJson(json, "ruta"), extraerValorJson(json, "usuario"),
+                    ModoUsuario.valueOf(extraerValorJson(json, "modo")), tamano.isEmpty() ? 0 : Integer.parseInt(tamano),
+                    permiso.isEmpty() ? null : Permiso.valueOf(permiso), nombre.isEmpty() ? null : nombre);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Petición de archivo inválida: " + e.getMessage(), e);
         }
     }
 

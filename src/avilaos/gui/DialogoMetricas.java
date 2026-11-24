@@ -145,6 +145,7 @@ public class DialogoMetricas extends JDialog {
         // Calcular totales
         int exitosos = 0;
         int porDeadline = 0;
+        int totalTerminados = 0;
         double sumaUsoCpu = 0;
         long sumaTiemposRespuesta = 0;
         int procesosConRespuesta = 0;
@@ -158,6 +159,7 @@ public class DialogoMetricas extends JDialog {
             sumaUsoCpu += comp.getCpu().getPorcentajeUtilizacion();
 
             int term = so.getColaTerminados().obtenerTamano();
+            totalTerminados += term;
             for (int t = 0; t < term; t++) {
                 Proceso proc = so.getColaTerminados().obtener(t);
                 if (proc != null && proc.getPcb().getCicloPrimeraEjecucion() >= 0) {
@@ -170,7 +172,6 @@ public class DialogoMetricas extends JDialog {
             }
         }
 
-        int totalTerminados = exitosos + porDeadline;
         double tasaExito = totalTerminados > 0 ? ((double) exitosos / totalTerminados) * 100.0 : 100.0;
         double throughput = ciclos > 0 ? ((double) exitosos / ciclos) * 10.0 : 0.0;
         double cpuPromedio = totalComp > 0 ? (sumaUsoCpu / totalComp) : 0.0;
@@ -226,7 +227,7 @@ public class DialogoMetricas extends JDialog {
         // Métricas locales del computador (Sección 8)
         int exitososLocal = so.getProcesosCompletadosExitosos();
         int porDeadlineLocal = so.getProcesosTerminadosPorDeadline();
-        int totalTerminadosLocal = exitososLocal + porDeadlineLocal;
+        int totalTerminadosLocal = so.getColaTerminados().obtenerTamano();
         double tasaCumplimientoLocal = totalTerminadosLocal > 0 ? ((double) exitososLocal / totalTerminadosLocal) * 100.0 : 100.0;
         double throughputLocal = ciclos > 0 ? ((double) exitososLocal / ciclos) * 10.0 : 0.0;
 

@@ -29,7 +29,7 @@ public class SistemaArchivos {
     private final Directorio raiz;
     private final Semaphore mutex;
     private final DiscoSimulado disco;
-    private record Escritura(long id, PeticionArchivo peticion, Archivo archivo) {}
+    private record Escritura(long id, PeticionArchivo peticion, NodoSistemaArchivos nodo) {}
     private final ListaEnlazada<Escritura> escrituras = new ListaEnlazada<>();
 
     public SistemaArchivos() {
@@ -187,21 +187,7 @@ public class SistemaArchivos {
         exigirAdministrador(modo);
         adquirir();
         try {
-            Directorio directorio = directorioExistente(ruta);
-            if (directorio == raiz) {
-                throw new IllegalArgumentException("La raíz no puede eliminarse.");
-            }
-            ListaEnlazada<Archivo> archivos = new ListaEnlazada<>();
-            recolectarArchivos(directorio, archivos);
-            int[] inicios = new int[archivos.obtenerTamano()];
-            for (int i = 0; i < inicios.length; i++) {
-                inicios[i] = archivos.obtener(i).getPrimerBloque();
-            }
-            disco.liberarCadenas(inicios);
-            directorio.getPadre().quitarHijo(directorio);
-            for (int i = 0; i < inicios.length; i++) {
-                archivos.obtener(i).setPrimerBloque(Archivo.SIN_BLOQUES);
-            }
+            borrarDirectorio(directorioExistente(ruta));
         } finally {
             liberar();
         }
@@ -242,6 +228,22 @@ public class SistemaArchivos {
         nodo.setNombre(limpio);
     }
 
+    private void borrarDirectorio(Directorio directorio) {
+        if (directorio == raiz) throw new IllegalArgumentException("La raíz no puede eliminarse.");
+        for (int i = 0; i < escrituras.obtenerTamano(); i++) {
+            if (escrituras.obtener(i).nodo().estaDentroDe(directorio)) {
+                throw new IllegalStateException("Hay una escritura pendiente en el directorio.");
+            }
+        }
+        ListaEnlazada<Archivo> archivos = new ListaEnlazada<>();
+        recolectarArchivos(directorio, archivos);
+        int[] inicios = new int[archivos.obtenerTamano()];
+        for (int i = 0; i < inicios.length; i++) inicios[i] = archivos.obtener(i).getPrimerBloque();
+        disco.liberarCadenas(inicios);
+        directorio.getPadre().quitarHijo(directorio);
+        for (int i = 0; i < inicios.length; i++) archivos.obtener(i).setPrimerBloque(Archivo.SIN_BLOQUES);
+    }
+
     private void borrarArchivo(Archivo archivo) {
         disco.liberar(archivo.getPrimerBloque());
         archivo.getPadre().quitarHijo(archivo);
@@ -268,10 +270,14 @@ public class SistemaArchivos {
                 archivo = reservarCreacion(peticion, proceso);
             } else {
                 exigirAdministrador(peticion.modo());
-                if (!(nodoExistente(peticion.ruta()) instanceof Archivo destino)) {
-                    throw new IllegalArgumentException("La operación de E/S requiere un archivo.");
+                NodoSistemaArchivos destino = nodoExistente(peticion.ruta());
+                if (destino == raiz) throw new IllegalArgumentException("La raíz no puede modificarse.");
+                if (destino instanceof Directorio directorio) {
+                    SolicitudDisco solicitud = disco.escribirDirectorio(directorio.getRuta());
+                    escrituras.agregar(new Escritura(solicitud.id(), peticion, directorio));
+                    return solicitud;
                 }
-                archivo = destino;
+                archivo = (Archivo) destino;
             }
             SolicitudDisco solicitud;
             try {
@@ -307,9 +313,10 @@ public class SistemaArchivos {
         try {
             Escritura escritura = retirarEscritura(id);
             if (escritura == null) return;
-            Archivo archivo = escritura.archivo();
+            NodoSistemaArchivos nodo = escritura.nodo();
             switch (escritura.peticion().operacion()) {
                 case CREAR -> {
+                    Archivo archivo = (Archivo) nodo;
                     try {
                         if (!archivo.estaDentroDe(raiz)) throw new IllegalStateException("El directorio fue eliminado.");
                         archivo.getPadre().agregarHijo(archivo);
@@ -319,9 +326,14 @@ public class SistemaArchivos {
                     }
                 }
                 case ACTUALIZAR, ELIMINAR -> {
-                    if (!archivo.estaDentroDe(raiz)) throw new IllegalStateException("El archivo fue eliminado.");
-                    if (escritura.peticion().operacion() == OperacionArchivo.ELIMINAR) borrarArchivo(archivo);
-                    else renombrarNodo(archivo, escritura.peticion().nuevoNombre());
+                    if (!nodo.estaDentroDe(raiz)) throw new IllegalStateException("La ruta fue eliminada.");
+                    if (escritura.peticion().operacion() == OperacionArchivo.ACTUALIZAR) {
+                        renombrarNodo(nodo, escritura.peticion().nuevoNombre());
+                    } else if (nodo instanceof Directorio directorio) {
+                        borrarDirectorio(directorio);
+                    } else {
+                        borrarArchivo((Archivo) nodo);
+                    }
                 }
                 default -> throw new IllegalStateException("Operación de escritura inválida.");
             }
@@ -336,7 +348,7 @@ public class SistemaArchivos {
             disco.cancelarTransferencia(id);
             Escritura escritura = retirarEscritura(id);
             if (escritura != null && escritura.peticion().operacion() == OperacionArchivo.CREAR) {
-                disco.liberar(escritura.archivo().getPrimerBloque());
+                disco.liberar(((Archivo) escritura.nodo()).getPrimerBloque());
             }
         } finally {
             liberar();

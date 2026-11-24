@@ -69,10 +69,10 @@ public final class DiscoSimulado implements IComponenteReloj {
                     bloques[bloque.numero()] = new Bloque(bloque.numero(), false, destino, bloque.siguiente());
                 }
             }
-            if (activa != null) activa = conOcupanteActual(activa);
+            if (activa != null) activa = conOcupanteActual(activa, anterior, nueva);
             for (int i = 0; i < cola.obtenerTamano(); i++) {
                 SolicitudDisco solicitud = cola.obtener(i);
-                SolicitudDisco actualizada = conOcupanteActual(solicitud);
+                SolicitudDisco actualizada = conOcupanteActual(solicitud, anterior, nueva);
                 if (actualizada != solicitud) cola.reemplazar(i, actualizada);
             }
         } finally {
@@ -84,10 +84,17 @@ public final class DiscoSimulado implements IComponenteReloj {
         return asignar(proceso, unidadesRam, true);
     }
 
-    private SolicitudDisco conOcupanteActual(SolicitudDisco solicitud) {
-        String ocupante = bloques[solicitud.inicio()].ocupante();
+    private SolicitudDisco conOcupanteActual(SolicitudDisco solicitud, String anterior, String nueva) {
+        String ocupante;
+        if (solicitud.metadatos()) {
+            String ruta = solicitud.ocupante();
+            if (!ruta.equals(anterior) && !ruta.startsWith(anterior + "/")) return solicitud;
+            ocupante = nueva + ruta.substring(anterior.length());
+        } else {
+            ocupante = bloques[solicitud.inicio()].ocupante();
+        }
         if (solicitud.ocupante().equals(ocupante)) return solicitud;
-        return new SolicitudDisco(solicitud.id(), solicitud.inicio(), solicitud.operacion(), ocupante);
+        return new SolicitudDisco(solicitud.id(), solicitud.inicio(), solicitud.operacion(), ocupante, solicitud.metadatos());
     }
 
     private int asignar(String ocupante, int cantidad, boolean swap) {
@@ -139,11 +146,11 @@ public final class DiscoSimulado implements IComponenteReloj {
         try {
             for (int inicio : cadenas) {
                 validarInicio(inicio);
-                if (activa != null && activa.inicio() == inicio) {
+                if (activa != null && activa.usaCadena(inicio)) {
                     throw new IllegalStateException("Transferencia en curso.");
                 }
                 for (int i = 0; i < cola.obtenerTamano(); i++) {
-                    if (cola.obtener(i).inicio() == inicio) throw new IllegalStateException("Transferencia pendiente.");
+                    if (cola.obtener(i).usaCadena(inicio)) throw new IllegalStateException("Transferencia pendiente.");
                 }
             }
             for (int inicio : cadenas) {
@@ -153,6 +160,18 @@ public final class DiscoSimulado implements IComponenteReloj {
                     i = bloque.siguiente();
                 }
             }
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** El directorio carece de cadena: se simula un acceso de metadatos en la posición actual. */
+    public SolicitudDisco escribirDirectorio(String ruta) {
+        mutex.acquireUninterruptibly();
+        try {
+            var solicitud = new SolicitudDisco(siguienteId++, cabezal, Operacion.ESCRITURA, ruta, true);
+            cola.agregar(solicitud);
+            return solicitud;
         } finally {
             mutex.release();
         }
@@ -229,7 +248,7 @@ public final class DiscoSimulado implements IComponenteReloj {
             if (objetivo != cabezal) {
                 moverHacia(objetivo);
             } else {
-                objetivo = bloques[cabezal].siguiente();
+                objetivo = activa.metadatos() ? -1 : bloques[cabezal].siguiente();
                 if (objetivo < 0) {
                     terminada = activa;
                     activa = null;

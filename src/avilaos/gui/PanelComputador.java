@@ -670,6 +670,7 @@ public class PanelComputador extends JPanel {
             if (p != null) {
                 PCB pcb = p.getPcb();
                 String resultado = pcb.isTerminoPorDeadline() ? "ABORTADO DEADLINE" : "EXITOSO";
+                if (pcb.getErrorArchivo() != null) resultado = "RECHAZADO: " + pcb.getErrorArchivo();
                 String txt = String.format("[%s] %s | %s (@c%d)",
                         pcb.getId(), pcb.getNombre(), resultado, pcb.getCicloTerminacion());
                 modelTerminados.addElement(new ProcesoItem(p, txt));

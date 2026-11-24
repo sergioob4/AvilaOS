@@ -95,7 +95,9 @@ public class DialogoDetallePCB extends JDialog {
         panelCentro.add(crearFila("Ciclo de Terminación:", pcb.getCicloTerminacion() >= 0 ? String.valueOf(pcb.getCicloTerminacion()) : "En curso"));
 
         String resultado = "En curso";
-        if (pcb.isTerminoPorDeadline()) {
+        if (pcb.getErrorArchivo() != null) {
+            resultado = "Rechazado: " + pcb.getErrorArchivo();
+        } else if (pcb.isTerminoPorDeadline()) {
             resultado = "Abortado por Deadline";
         } else if (pcb.isCumplioDeadline()) {
             resultado = "Completado a tiempo";
