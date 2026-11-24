@@ -47,9 +47,15 @@ public class Proceso {
      */
     public Proceso(String nombre, String computador, TipoProceso tipo,
                    int prioridad, int memoria, int deadline, int tiempoEjecucion) {
+        this(nombre, computador, tipo, prioridad, memoria, deadline, tiempoEjecucion, null);
+    }
+
+    public Proceso(String nombre, String computador, TipoProceso tipo,
+                   int prioridad, int memoria, int deadline, int tiempoEjecucion, PeticionArchivo peticionArchivo) {
         int idNumero = GeneradorIdProceso.siguienteIdNumero();
         String idTexto = "P" + idNumero;
-        this.pcb = new PCB(idTexto, idNumero, nombre, computador, tipo, prioridad, memoria, deadline, tiempoEjecucion);
+        this.pcb = new PCB(idTexto, idNumero, nombre, computador, tipo, prioridad, memoria, deadline,
+                tiempoEjecucion, peticionArchivo);
     }
 
     // -------------------------------------------------------------------------

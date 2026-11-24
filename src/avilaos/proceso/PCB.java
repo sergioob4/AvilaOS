@@ -55,6 +55,7 @@ public class PCB {
 
     /** Clasificación del proceso según su carga o rol. */
     private final TipoProceso tipo;
+    private final PeticionArchivo peticionArchivo;
 
     // -------------------------------------------------------------------------
     // Planificación y Recursos
@@ -194,6 +195,17 @@ public class PCB {
     public PCB(String id, int idNumero, String nombre, String computadorAsignado,
                TipoProceso tipo, int prioridad, int memoriaAsignada,
                int deadline, int tiempoEjecucion) {
+        this(id, idNumero, nombre, computadorAsignado, tipo, prioridad, memoriaAsignada,
+                deadline, tiempoEjecucion, null);
+    }
+
+    PCB(String id, int idNumero, String nombre, String computadorAsignado,
+        TipoProceso tipo, int prioridad, int memoriaAsignada, int deadline, int tiempoEjecucion,
+        PeticionArchivo peticionArchivo) {
+        if (peticionArchivo != null && tipo != TipoProceso.IO_BOUND) {
+            throw new IllegalArgumentException("La petición de archivo requiere un proceso de E/S.");
+        }
+        this.peticionArchivo = peticionArchivo;
         this.id = id;
         this.idNumero = idNumero;
         this.nombre = nombre;
@@ -261,6 +273,10 @@ public class PCB {
 
     public void setMotivoBloqueo(MotivoBloqueo motivoBloqueo) {
         this.motivoBloqueo = motivoBloqueo;
+    }
+
+    public PeticionArchivo getPeticionArchivo() {
+        return peticionArchivo;
     }
 
     public TipoProceso getTipo() {
