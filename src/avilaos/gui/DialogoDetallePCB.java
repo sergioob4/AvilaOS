@@ -153,10 +153,12 @@ public class DialogoDetallePCB extends JDialog {
 
         JLabel lbl = new JLabel(label);
         lbl.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        lbl.setVerticalAlignment(SwingConstants.CENTER);
         lbl.setForeground(COLOR_LABEL);
 
         JLabel val = new JLabel(valor);
-        val.setFont(new Font("Consolas", Font.BOLD, 12));
+        val.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        val.setVerticalAlignment(SwingConstants.CENTER);
         val.setForeground(COLOR_VALOR);
 
         p.add(lbl, BorderLayout.NORTH);

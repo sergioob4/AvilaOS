@@ -219,11 +219,11 @@ final class PanelSistemaArchivos extends JPanel {
     }
 
     private JPanel crearPanelDetalle() {
-        JPanel detalle = new JPanel(new GridLayout(4, 2, 10, 4));
+        JPanel detalle = new JPanel(new GridLayout(4, 2, 12, 6));
         detalle.setBackground(COLOR_SURFACE);
         detalle.setBorder(BorderFactory.createCompoundBorder(
                 new LineBorder(COLOR_BORDE, 1, true),
-                new EmptyBorder(8, 10, 8, 10)
+                new EmptyBorder(10, 12, 10, 12)
         ));
 
         detalle.add(crearParDetalle("Nombre:", lblDetNombre));
@@ -238,20 +238,37 @@ final class PanelSistemaArchivos extends JPanel {
     }
 
     private JPanel crearParDetalle(String etiqueta, JLabel valor) {
-        JPanel par = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JPanel par = new JPanel(new GridBagLayout());
         par.setOpaque(false);
+
         JLabel lbl = new JLabel(etiqueta);
-        lbl.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
         lbl.setForeground(COLOR_MUTED);
-        par.add(lbl);
-        par.add(valor);
+        lbl.setVerticalAlignment(SwingConstants.CENTER);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = 0;
+        gbc.anchor = GridBagConstraints.BASELINE_LEADING;
+        gbc.insets = new Insets(0, 0, 0, 6);
+
+        gbc.gridx = 0;
+        gbc.weightx = 0.0;
+        par.add(lbl, gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(0, 0, 0, 0);
+        par.add(valor, gbc);
+
         return par;
     }
 
     private static JLabel crearValorDetalle(String texto) {
         JLabel lbl = new JLabel(texto);
-        lbl.setFont(new Font("Consolas", Font.PLAIN, 11));
+        lbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lbl.setForeground(COLOR_TEXTO);
+        lbl.setVerticalAlignment(SwingConstants.CENTER);
         return lbl;
     }
 
