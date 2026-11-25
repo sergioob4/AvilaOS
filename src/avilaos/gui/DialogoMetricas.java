@@ -146,6 +146,8 @@ public class DialogoMetricas extends JDialog {
         int exitosos = 0;
         int porDeadline = 0;
         int totalTerminados = 0;
+        int totalSuspensiones = 0;
+        int totalReactivaciones = 0;
         double sumaUsoCpu = 0;
         long sumaTiemposRespuesta = 0;
         int procesosConRespuesta = 0;
@@ -156,6 +158,8 @@ public class DialogoMetricas extends JDialog {
             SistemaOperativo so = comp.getSo();
             exitosos += so.getProcesosCompletadosExitosos();
             porDeadline += so.getProcesosTerminadosPorDeadline();
+            totalSuspensiones += so.getTotalSuspensiones();
+            totalReactivaciones += so.getTotalReactivaciones();
             sumaUsoCpu += comp.getCpu().getPorcentajeUtilizacion();
 
             int term = so.getColaTerminados().obtenerTamano();
@@ -179,7 +183,7 @@ public class DialogoMetricas extends JDialog {
 
         MetricasEquidad.Resultado equidad = MetricasEquidad.calcular(cluster);
 
-        JPanel grid = new JPanel(new GridLayout(3, 3, 10, 10));
+        JPanel grid = new JPanel(new GridLayout(4, 3, 10, 10));
         grid.setOpaque(false);
 
         grid.add(crearMetricaBox("Throughput (x10 c)", String.format("%.2f proc/10c", throughput), COLOR_VERDE));
@@ -193,6 +197,11 @@ public class DialogoMetricas extends JDialog {
         grid.add(crearMetricaBox("Latencia Red", cluster.getLatenciaRedCiclos() + " ciclos", COLOR_MUTED));
         grid.add(crearMetricaBox("Equidad (Jain, " + equidad.getProcesosMedidos() + " proc.)",
                 String.format("%.3f", equidad.getIndice()), colorEquidad(equidad.getIndice())));
+        grid.add(crearMetricaBox("Suspensiones (Swap-out)", String.valueOf(totalSuspensiones), new Color(192, 132, 252)));
+        grid.add(crearMetricaBox("Reactivaciones (Swap-in)", String.valueOf(totalReactivaciones), new Color(56, 189, 248)));
+        grid.add(crearMetricaBox("Swap Libre (C1)",
+                totalComp > 0 ? cluster.getComputadores().obtener(0).getDisco().getBloquesSwapLibres() + " blq" : "-",
+                COLOR_MUTED));
 
         p.add(grid, BorderLayout.CENTER);
         return p;
@@ -250,7 +259,7 @@ public class DialogoMetricas extends JDialog {
 
         MetricasEquidad.Resultado equidad = MetricasEquidad.calcular(comp);
 
-        JPanel subGrid = new JPanel(new GridLayout(7, 2, 8, 8));
+        JPanel subGrid = new JPanel(new GridLayout(9, 2, 8, 8));
         subGrid.setOpaque(false);
 
         subGrid.add(crearSubDato("Política:", so.getPolitica().getTipo().getCodigo()));
@@ -263,6 +272,10 @@ public class DialogoMetricas extends JDialog {
         subGrid.add(crearSubDato("Equidad (Jain):", String.format("%.3f", equidad.getIndice())));
         subGrid.add(crearSubDato("Cola Listos:", String.valueOf(so.getColaListos().obtenerTamano())));
         subGrid.add(crearSubDato("Cola Bloqueados:", String.valueOf(so.getColaBloqueados().obtenerTamano())));
+        subGrid.add(crearSubDato("Listo/Suspendido:", String.valueOf(so.getColaListosSuspendidos().obtenerTamano())));
+        subGrid.add(crearSubDato("Bloq/Suspendido:", String.valueOf(so.getColaBloqueadosSuspendidos().obtenerTamano())));
+        subGrid.add(crearSubDato("Suspensiones:", String.valueOf(so.getTotalSuspensiones())));
+        subGrid.add(crearSubDato("Reactivaciones:", String.valueOf(so.getTotalReactivaciones())));
         subGrid.add(crearSubDato("Completados:", String.valueOf(exitososLocal)));
         subGrid.add(crearSubDato("Por Deadline:", String.valueOf(porDeadlineLocal)));
         subGrid.add(crearSubDato("Procesos medidos:", String.valueOf(equidad.getProcesosMedidos())));

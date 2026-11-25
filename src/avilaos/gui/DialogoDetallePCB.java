@@ -105,6 +105,17 @@ public class DialogoDetallePCB extends JDialog {
         panelCentro.add(crearFila("Estado Final:", resultado));
         panelCentro.add(crearFila("Tiempo Espera en Listos:", pcb.getTiempoEnEspera() + " ciclos"));
 
+        // Atributos de E/S de Archivos y Suspensión (Proyecto 2)
+        if (pcb.getPeticionArchivo() != null) {
+            panelCentro.add(crearFila("Operación de Archivo:", pcb.getPeticionArchivo().operacion().toString()));
+            panelCentro.add(crearFila("Ruta de Archivo:", pcb.getPeticionArchivo().ruta()));
+        }
+        panelCentro.add(crearFila("Bloque Swap:", pcb.getPrimerBloqueSwap() >= 0
+                ? "#" + pcb.getPrimerBloqueSwap() + " (" + pcb.getMemoriaAsignada() + " blq)"
+                : "No suspendido"));
+        panelCentro.add(crearFila("Suspensiones / Swap:", pcb.getVecesSuspendido()
+                + (pcb.getOperacionSwapEnCurso() != null ? " (" + pcb.getOperacionSwapEnCurso().getEtiqueta() + ")" : "")));
+
         // Atributos de Sincronización (Requerimiento 4)
         if (pcb.getIdBuffer() != null || pcb.getTipo() == TipoProceso.PRODUCTOR || pcb.getTipo() == TipoProceso.CONSUMIDOR) {
             panelCentro.add(crearFila("Buffer Asociado:", pcb.getIdBuffer() != null ? pcb.getIdBuffer() : "Ninguno"));
@@ -160,6 +171,8 @@ public class DialogoDetallePCB extends JDialog {
             case LISTO: return new Color(191, 219, 254);      // Azul cielo
             case EJECUCION: return new Color(187, 247, 208);  // Verde menta
             case BLOQUEADO: return new Color(254, 240, 138);  // Amarillo suave
+            case LISTO_SUSPENDIDO: return new Color(216, 180, 254); // Violeta claro
+            case BLOQUEADO_SUSPENDIDO: return new Color(253, 186, 116); // Naranja claro
             case TERMINADO: return new Color(241, 245, 249);  // Blanco grisáceo
             default: return Color.WHITE;
         }
@@ -172,6 +185,8 @@ public class DialogoDetallePCB extends JDialog {
             case LISTO: return new Color(30, 58, 138);        // Azul oscuro
             case EJECUCION: return new Color(20, 83, 45);     // Verde bosque
             case BLOQUEADO: return new Color(120, 53, 15);    // Ámbar profundo
+            case LISTO_SUSPENDIDO: return new Color(107, 33, 168); // Púrpura oscuro
+            case BLOQUEADO_SUSPENDIDO: return new Color(154, 52, 18); // Naranja oscuro
             case TERMINADO: return new Color(51, 65, 85);     // Pizarra neutro
             default: return new Color(40, 48, 62);
         }

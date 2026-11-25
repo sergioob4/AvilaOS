@@ -227,7 +227,11 @@ public class GestorSincronizacion implements IComponenteReloj {
      * @param cicloActual ciclo global de reloj
      */
     public synchronized void actualizarBloqueadosPorTiempo(SistemaOperativo so, long cicloActual) {
-        ListaEnlazada<Proceso> bloqueados = so.getColaBloqueados();
+        actualizarListaBloqueadosPorTiempo(so, so.getColaBloqueados(), cicloActual);
+        actualizarListaBloqueadosPorTiempo(so, so.getColaBloqueadosSuspendidos(), cicloActual);
+    }
+
+    private void actualizarListaBloqueadosPorTiempo(SistemaOperativo so, ListaEnlazada<Proceso> bloqueados, long cicloActual) {
         int total = bloqueados.obtenerTamano();
 
         for (int i = total - 1; i >= 0; i--) {
@@ -245,7 +249,7 @@ public class GestorSincronizacion implements IComponenteReloj {
                 pcb.setCiclosLatenciaRedRestante(latenciaRestante);
 
                 if (latenciaRestante <= 0) {
-                    // El paquete de red llegó al computador anfitrión; reingresa a LISTOS para operar
+                    // El paquete de red llegó al computador anfitrión; reingresa a LISTOS o LISTO_SUSPENDIDO
                     pcb.setLatenciaRedCompletada(true);
                     so.desbloquearProceso(p, cicloActual);
                 }

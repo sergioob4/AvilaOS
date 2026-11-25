@@ -184,6 +184,32 @@ public class Proceso {
         }
     }
 
+    /** Transiciona de BLOQUEADO a BLOQUEADO_SUSPENDIDO conservando el motivo de bloqueo. */
+    public void suspenderBloqueado() {
+        if (pcb.getEstado().esTransicionValida(EstadoProceso.BLOQUEADO_SUSPENDIDO)) {
+            pcb.setEstado(EstadoProceso.BLOQUEADO_SUSPENDIDO);
+        }
+    }
+
+    /** Transiciona de BLOQUEADO_SUSPENDIDO (o LISTO) a LISTO_SUSPENDIDO limpiando el motivo de bloqueo. */
+    public void pasarAListoSuspendido() {
+        if (pcb.getEstado().esTransicionValida(EstadoProceso.LISTO_SUSPENDIDO)) {
+            pcb.setEstado(EstadoProceso.LISTO_SUSPENDIDO);
+            pcb.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+        }
+    }
+
+    /** Transiciona de LISTO_SUSPENDIDO a LISTO al regresar a memoria principal. */
+    public void reactivarAListo(long cicloGlobal) {
+        if (pcb.getEstado().esTransicionValida(EstadoProceso.LISTO)) {
+            pcb.setEstado(EstadoProceso.LISTO);
+            pcb.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+            if (pcb.getCicloPrimerListo() == -1) {
+                pcb.setCicloPrimerListo(cicloGlobal);
+            }
+        }
+    }
+
     /**
      * Termina el proceso exitosamente al haber completado todas sus instrucciones.
      *

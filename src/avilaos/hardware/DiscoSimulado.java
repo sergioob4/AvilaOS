@@ -84,6 +84,27 @@ public final class DiscoSimulado implements IComponenteReloj {
         return asignar(proceso, unidadesRam, true);
     }
 
+    /** Cantidad de bloques libres actualmente en el área de intercambio (swap). */
+    public int getBloquesSwapLibres() {
+        mutex.acquireUninterruptibly();
+        try {
+            int libres = 0;
+            for (Bloque bloque : bloques) {
+                if (bloque.swap() && bloque.ocupante() == null) {
+                    libres++;
+                }
+            }
+            return libres;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Capacidad total configurada del área de intercambio (swap) en bloques. */
+    public int getBloquesSwapTotales() {
+        return config.swap();
+    }
+
     private SolicitudDisco conOcupanteActual(SolicitudDisco solicitud, String anterior, String nueva) {
         String ocupante;
         if (solicitud.metadatos()) {
@@ -111,12 +132,19 @@ public final class DiscoSimulado implements IComponenteReloj {
             }
             if (libres < cantidad) throw new IllegalStateException("Bloques libres insuficientes.");
             int primero = -1;
-            // Cada bloque nuevo apunta a la cadena ya construida.
+            int anterior = -1;
+            // Enlaza los bloques libres en orden ascendente (primero -> ... -> ultimo -> -1).
             for (int i = 0; i < bloques.length && cantidad > 0; i++) {
                 Bloque bloque = bloques[i];
                 if (bloque.swap() == swap && bloque.ocupante() == null) {
-                    bloques[i] = new Bloque(i, swap, ocupante, primero);
-                    primero = i;
+                    bloques[i] = new Bloque(i, swap, ocupante, -1);
+                    if (primero < 0) {
+                        primero = i;
+                    } else {
+                        Bloque prev = bloques[anterior];
+                        bloques[anterior] = new Bloque(prev.numero(), prev.swap(), prev.ocupante(), i);
+                    }
+                    anterior = i;
                     cantidad--;
                 }
             }

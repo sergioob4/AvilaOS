@@ -2,6 +2,7 @@ package avilaos.proceso;
 
 import avilaos.enums.EstadoProceso;
 import avilaos.enums.MotivoBloqueo;
+import avilaos.enums.TipoOperacionES;
 import avilaos.enums.TipoProceso;
 
 /**
@@ -58,6 +59,25 @@ public class PCB {
     private final PeticionArchivo peticionArchivo;
     private long idSolicitudDisco;
     private String errorArchivo;
+
+    // -------------------------------------------------------------------------
+    // Estado de Suspensión e Intercambio (Swap - Modelo de 7 Estados)
+    // -------------------------------------------------------------------------
+
+    /** Bloque inicial asignado en el área de intercambio del disco (-1 si no ocupa swap). */
+    private int primerBloqueSwap = -1;
+
+    /** ID de la solicitud de disco en curso para suspender o reactivar (0 si ninguna). */
+    private long idSolicitudSwap = 0;
+
+    /** Operación de swap en curso (SUSPENDER o REACTIVAR), o null si ninguna. */
+    private TipoOperacionES operacionSwapEnCurso = null;
+
+    /** Marca que el evento de bloqueo ocurrió mientras el swap-out aún viajaba por el disco. */
+    private boolean desbloqueoPendienteTrasSwap = false;
+
+    /** Cantidad de veces que este proceso ha sido suspendido al área de swap. */
+    private int vecesSuspendido = 0;
 
     // -------------------------------------------------------------------------
     // Planificación y Recursos
@@ -296,6 +316,46 @@ public class PCB {
 
     void setErrorArchivo(String errorArchivo) {
         this.errorArchivo = errorArchivo;
+    }
+
+    public int getPrimerBloqueSwap() {
+        return primerBloqueSwap;
+    }
+
+    public void setPrimerBloqueSwap(int primerBloqueSwap) {
+        this.primerBloqueSwap = primerBloqueSwap;
+    }
+
+    public long getIdSolicitudSwap() {
+        return idSolicitudSwap;
+    }
+
+    public void setIdSolicitudSwap(long idSolicitudSwap) {
+        this.idSolicitudSwap = idSolicitudSwap;
+    }
+
+    public TipoOperacionES getOperacionSwapEnCurso() {
+        return operacionSwapEnCurso;
+    }
+
+    public void setOperacionSwapEnCurso(TipoOperacionES operacionSwapEnCurso) {
+        this.operacionSwapEnCurso = operacionSwapEnCurso;
+    }
+
+    public boolean isDesbloqueoPendienteTrasSwap() {
+        return desbloqueoPendienteTrasSwap;
+    }
+
+    public void setDesbloqueoPendienteTrasSwap(boolean desbloqueoPendienteTrasSwap) {
+        this.desbloqueoPendienteTrasSwap = desbloqueoPendienteTrasSwap;
+    }
+
+    public int getVecesSuspendido() {
+        return vecesSuspendido;
+    }
+
+    public void incrementarVecesSuspendido() {
+        this.vecesSuspendido++;
     }
 
     public TipoProceso getTipo() {
@@ -549,7 +609,9 @@ public class PCB {
     @Override
     public String toString() {
         return "PCB[" + id + " | " + nombre + " | " + estado +
-                (estado == EstadoProceso.BLOQUEADO ? " (" + motivoBloqueo + ")" : "") +
+                ((estado == EstadoProceso.BLOQUEADO || estado == EstadoProceso.BLOQUEADO_SUSPENDIDO)
+                        ? " (" + motivoBloqueo + ")" : "") +
+                (primerBloqueSwap >= 0 ? " | Swap:#" + primerBloqueSwap : "") +
                 " | Host:" + computadorAsignado +
                 " | DL:" + deadlineRestante + "/" + deadlineInicial +
                 " | Rest:" + tiempoRestanteEjecucion + "/" + tiempoEjecucionTotal +

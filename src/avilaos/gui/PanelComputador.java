@@ -70,15 +70,19 @@ public class PanelComputador extends JPanel {
     private JLabel lblMemoriaInfo;
     private JProgressBar barraMemoriaRam;
 
-    // Pestañas de Colas del Sistema Operativo
+    // Pestañas de Colas del Sistema Operativo (Modelo de 7 estados)
     private JTabbedPane tabbedColas;
     private DefaultListModel<ProcesoItem> modelListos;
     private DefaultListModel<ProcesoItem> modelNuevos;
     private DefaultListModel<ProcesoItem> modelBloqueados;
+    private DefaultListModel<ProcesoItem> modelListosSuspendidos;
+    private DefaultListModel<ProcesoItem> modelBloqueadosSuspendidos;
     private DefaultListModel<ProcesoItem> modelTerminados;
     private JList<ProcesoItem> listListos;
     private JList<ProcesoItem> listNuevos;
     private JList<ProcesoItem> listBloqueados;
+    private JList<ProcesoItem> listListosSuspendidos;
+    private JList<ProcesoItem> listBloqueadosSuspendidos;
     private JList<ProcesoItem> listTerminados;
 
     // Paleta de colores Dark Theme con alto contraste
@@ -418,6 +422,16 @@ public class PanelComputador extends JPanel {
         listBloqueados = crearJListProcesos(modelBloqueados);
         tabbedColas.addTab("Bloqueados (0)", new JScrollPane(listBloqueados));
 
+        // Pestaña Listo/Suspendido (en swap)
+        modelListosSuspendidos = new DefaultListModel<>();
+        listListosSuspendidos = crearJListProcesos(modelListosSuspendidos);
+        tabbedColas.addTab("Listo/Susp (0)", new JScrollPane(listListosSuspendidos));
+
+        // Pestaña Bloqueado/Suspendido (en swap, con motivo de bloqueo)
+        modelBloqueadosSuspendidos = new DefaultListModel<>();
+        listBloqueadosSuspendidos = crearJListProcesos(modelBloqueadosSuspendidos);
+        tabbedColas.addTab("Bloq/Susp (0)", new JScrollPane(listBloqueadosSuspendidos));
+
         // Pestaña Terminados
         modelTerminados = new DefaultListModel<>();
         listTerminados = crearJListProcesos(modelTerminados);
@@ -604,10 +618,12 @@ public class PanelComputador extends JPanel {
         lblQuantum.setEnabled(spinQuantum.isEnabled());
         actualizandoPoliticaInternamente = false;
 
-        // 6. Actualizar las 4 Colas del Sistema Operativo
+        // 6. Actualizar las 6 Colas del Sistema Operativo (Modelo de 7 estados)
         actualizarColaListos(so.getColaListos());
         actualizarColaNuevos(so.getColaNuevos());
         actualizarColaBloqueados(so.getColaBloqueados());
+        actualizarColaListosSuspendidos(so.getColaListosSuspendidos());
+        actualizarColaBloqueadosSuspendidos(so.getColaBloqueadosSuspendidos());
         actualizarColaTerminados(so.getColaTerminados());
     }
 
@@ -654,9 +670,46 @@ public class PanelComputador extends JPanel {
                 if (pcb.getMotivoBloqueo() == avilaos.enums.MotivoBloqueo.LATENCIA_RED) {
                     motivo = "Latencia Red (" + pcb.getCiclosLatenciaRedRestante() + "c)";
                 }
-                String txt = String.format("[%s] %s | %s",
-                        pcb.getId(), pcb.getNombre(), motivo);
+                String sufijoSwap = pcb.getOperacionSwapEnCurso() != null
+                        ? " | " + pcb.getOperacionSwapEnCurso().getEtiqueta() : "";
+                String txt = String.format("[%s] %s | %s%s",
+                        pcb.getId(), pcb.getNombre(), motivo, sufijoSwap);
                 modelBloqueados.addElement(new ProcesoItem(p, txt));
+            }
+        }
+    }
+
+    private void actualizarColaListosSuspendidos(ListaEnlazada<Proceso> cola) {
+        modelListosSuspendidos.clear();
+        int tam = cola.obtenerTamano();
+        tabbedColas.setTitleAt(3, "Listo/Susp (" + tam + ")");
+        for (int i = 0; i < tam; i++) {
+            Proceso p = cola.obtener(i);
+            if (p != null) {
+                PCB pcb = p.getPcb();
+                String swapTxt = pcb.getOperacionSwapEnCurso() != null
+                        ? " | " + pcb.getOperacionSwapEnCurso().getEtiqueta()
+                        : " | Swap:#" + pcb.getPrimerBloqueSwap();
+                String txt = String.format("[%s] %s | Prio:%d | RAM:%d MB%s",
+                        pcb.getId(), pcb.getNombre(), pcb.getPrioridad(),
+                        pcb.getMemoriaAsignada(), swapTxt);
+                modelListosSuspendidos.addElement(new ProcesoItem(p, txt));
+            }
+        }
+    }
+
+    private void actualizarColaBloqueadosSuspendidos(ListaEnlazada<Proceso> cola) {
+        modelBloqueadosSuspendidos.clear();
+        int tam = cola.obtenerTamano();
+        tabbedColas.setTitleAt(4, "Bloq/Susp (" + tam + ")");
+        for (int i = 0; i < tam; i++) {
+            Proceso p = cola.obtener(i);
+            if (p != null) {
+                PCB pcb = p.getPcb();
+                String motivo = pcb.getMotivoBloqueo() != null ? pcb.getMotivoBloqueo().getEtiqueta() : "Desconocido";
+                String txt = String.format("[%s] %s | %s | Swap:#%d",
+                        pcb.getId(), pcb.getNombre(), motivo, pcb.getPrimerBloqueSwap());
+                modelBloqueadosSuspendidos.addElement(new ProcesoItem(p, txt));
             }
         }
     }
@@ -664,7 +717,7 @@ public class PanelComputador extends JPanel {
     private void actualizarColaTerminados(ListaEnlazada<Proceso> cola) {
         modelTerminados.clear();
         int tam = cola.obtenerTamano();
-        tabbedColas.setTitleAt(3, "Terminados (" + tam + ")");
+        tabbedColas.setTitleAt(5, "Terminados (" + tam + ")");
         for (int i = 0; i < tam; i++) {
             Proceso p = cola.obtener(i);
             if (p != null) {

@@ -43,6 +43,18 @@ public enum EstadoProceso {
     BLOQUEADO("Bloqueado", "En espera de semáforo, recurso, red o E/S"),
 
     /**
+     * El proceso fue suspendido al área de intercambio (swap) en disco y su evento
+     * ya ocurrió o estaba listo; espera espacio en RAM para ser reactivado.
+     */
+    LISTO_SUSPENDIDO("Listo/Suspendido", "Suspendido en swap del disco; listo para volver a RAM"),
+
+    /**
+     * El proceso fue suspendido al área de intercambio (swap) en disco mientras
+     * esperaba un evento de sincronización, red o E/S.
+     */
+    BLOQUEADO_SUSPENDIDO("Bloqueado/Suspendido", "Suspendido en swap del disco esperando evento de bloqueo"),
+
+    /**
      * El proceso ha culminado su ejecución con éxito o ha sido abortado debido a que su
      * deadline llegó a 0. Sus recursos en memoria RAM han sido o están por ser liberados.
      */
@@ -99,8 +111,15 @@ public enum EstadoProceso {
     }
 
     /**
+     * Indica si el proceso se encuentra suspendido en el área de intercambio del disco.
+     */
+    public boolean esSuspendido() {
+        return this == LISTO_SUSPENDIDO || this == BLOQUEADO_SUSPENDIDO;
+    }
+
+    /**
      * Valida si una transición desde el estado actual hacia un nuevo estado es válida
-     * según el modelo de transiciones de ÁvilaOS.
+     * según el modelo de siete estados de ÁvilaOS.
      *
      * @param nuevoEstado estado destino
      * @return {@code true} si la transición es permitida; {@code false} de lo contrario
@@ -112,9 +131,11 @@ public enum EstadoProceso {
 
         return switch (this) {
             case NUEVO -> nuevoEstado == LISTO || nuevoEstado == TERMINADO;
-            case LISTO -> nuevoEstado == EJECUCION || nuevoEstado == TERMINADO;
+            case LISTO -> nuevoEstado == EJECUCION || nuevoEstado == LISTO_SUSPENDIDO || nuevoEstado == TERMINADO;
             case EJECUCION -> nuevoEstado == LISTO || nuevoEstado == BLOQUEADO || nuevoEstado == TERMINADO;
-            case BLOQUEADO -> nuevoEstado == LISTO || nuevoEstado == TERMINADO;
+            case BLOQUEADO -> nuevoEstado == LISTO || nuevoEstado == BLOQUEADO_SUSPENDIDO || nuevoEstado == TERMINADO;
+            case BLOQUEADO_SUSPENDIDO -> nuevoEstado == LISTO_SUSPENDIDO || nuevoEstado == BLOQUEADO || nuevoEstado == TERMINADO;
+            case LISTO_SUSPENDIDO -> nuevoEstado == LISTO || nuevoEstado == TERMINADO;
             case TERMINADO -> false; // Ninguna transición válida desde terminado
         };
     }

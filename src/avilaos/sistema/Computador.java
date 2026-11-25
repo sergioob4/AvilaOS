@@ -68,6 +68,7 @@ public class Computador implements IComponenteReloj {
         this.memoria = new MemoriaPrincipal(tamanoRamMb);
         this.so = new SistemaOperativo(id, this.cpu, this.memoria);
         disco = new DiscoSimulado(configDisco, so::registrarEvento);
+        this.so.setDisco(disco);
         sistemaArchivos = new SistemaArchivos(disco);
     }
 
