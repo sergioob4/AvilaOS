@@ -85,6 +85,12 @@ final class PanelOperacionesArchivo extends JPanel {
         nuevoNombre.setEnabled(operacion.getSelectedItem() == OperacionArchivo.ACTUALIZAR);
     }
 
+    void seleccionarRuta(String nuevaRuta) {
+        if (nuevaRuta != null && !nuevaRuta.isBlank()) {
+            ruta.setText(nuevaRuta);
+        }
+    }
+
     void actualizar() {
         if (ultimo == null) return;
         var pcb = ultimo.getPcb();

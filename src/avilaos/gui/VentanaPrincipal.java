@@ -37,6 +37,7 @@ import java.util.Date;
 public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
     private PanelDisco panelDisco;
+    private PanelSistemaArchivos panelSistemaArchivos;
     private PanelOperacionesArchivo panelArchivos;
     private final ClusterDistribuido cluster;
     private final RelojGlobal reloj;
@@ -415,16 +416,24 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         JScrollPane scrollBuffers = crearScrollLog(logBuffers);
         tabbedLogs.addTab("Buffers y Semáforos", scrollBuffers);
 
-        panelDisco = new PanelDisco(cluster.getComputadores().obtener(0).getDisco());
+        Computador primerComp = cluster.getComputadores().obtener(0);
+        panelDisco = new PanelDisco(primerComp.getDisco());
         tabbedLogs.insertTab("Disco local", null, panelDisco, null, 0);
+        panelSistemaArchivos = new PanelSistemaArchivos(primerComp.getSistemaArchivos(), ruta -> {
+            if (panelArchivos != null) {
+                panelArchivos.seleccionarRuta(ruta);
+                tabbedLogs.setSelectedComponent(panelArchivos);
+            }
+        });
+        tabbedLogs.insertTab("Sistema de archivos", null, panelSistemaArchivos, null, 1);
         if (cluster.getCantidadComputadores() == 1) {
-            SistemaOperativo so = cluster.getComputadores().obtener(0).getSo();
+            SistemaOperativo so = primerComp.getSo();
             panelArchivos = new PanelOperacionesArchivo(peticion -> {
                 Proceso creado = so.crearProcesoArchivo(peticion, reloj.getCicloActual());
                 actualizarTodo();
                 return creado;
             });
-            tabbedLogs.insertTab("Operaciones de archivo", null, panelArchivos, null, 1);
+            tabbedLogs.insertTab("Operaciones de archivo", null, panelArchivos, null, 2);
         }
         tabbedLogs.setSelectedComponent(panelDisco);
         contenedor.add(tabbedLogs, BorderLayout.CENTER);
@@ -644,6 +653,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      */
     public void actualizarTodo() {
         panelDisco.actualizar();
+        if (panelSistemaArchivos != null) panelSistemaArchivos.actualizar();
         if (panelArchivos != null) panelArchivos.actualizar();
         lblCicloGlobal.setText("  Ciclo Global: " + reloj.getCicloActual() + "  ");
 

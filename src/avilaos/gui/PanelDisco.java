@@ -20,8 +20,28 @@ final class PanelDisco extends JPanel {
     private int seleccionado = -1;
     private static final Color SWAP_LIBRE = new Color(190, 132, 255);
     private static final Color TEXTO_SWAP_LIBRE = new Color(29, 11, 49);
+    private static final Color[] PALETA_ARCHIVOS = {
+        new Color(25, 102, 147),
+        new Color(22, 138, 107),
+        new Color(14, 116, 144),
+        new Color(79, 70, 229),
+        new Color(147, 51, 234),
+        new Color(190, 24, 93),
+        new Color(180, 83, 9),
+        new Color(21, 128, 61),
+        new Color(3, 105, 161),
+        new Color(109, 40, 217)
+    };
     private static final Border CABEZAL = BorderFactory.createLineBorder(new Color(255, 194, 60), 3);
     private static final Border NORMAL = BorderFactory.createEmptyBorder(3, 3, 3, 3);
+
+    /** Color determinista compartido entre el mapa del disco y la tabla de asignación. */
+    static Color colorArchivo(String ruta) {
+        if (ruta == null || ruta.isEmpty()) {
+            return PALETA_ARCHIVOS[0];
+        }
+        return PALETA_ARCHIVOS[Math.floorMod(ruta.hashCode(), PALETA_ARCHIVOS.length)];
+    }
 
     PanelDisco(DiscoSimulado disco) {
         super(new BorderLayout(4, 4));
@@ -72,7 +92,7 @@ final class PanelDisco extends JPanel {
             if (b.ocupante() != null) {
                 uso = (b.swap() ? "Proceso " : "Archivo ") + b.ocupante()
                         + (b.siguiente() >= 0 ? " → " + b.siguiente() : " · Fin de cadena");
-                color = b.swap() ? new Color(151, 78, 24) : new Color(25, 102, 147);
+                color = b.swap() ? new Color(151, 78, 24) : colorArchivo(b.ocupante());
             }
             String texto = "Bloque " + b.numero() + " · " + uso;
             celda.setBackground(color);
