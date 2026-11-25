@@ -15,6 +15,12 @@ public final class DiscoSimulado implements IComponenteReloj {
     public record Vista(Bloque[] bloques, int cabezal, Direccion direccion, Operacion operacion,
                         PoliticaDisco politica, SolicitudDisco activa, SolicitudDisco[] pendientes,
                         long desplazamiento) {}
+    public record PuntoDesplazamiento(long ciclo, long desplazamiento, PoliticaDisco politica) {}
+    public record SeriePolitica(PoliticaDisco politica, PuntoDesplazamiento[] puntos,
+                                long desplazamientoFinal, double esperaPromedio, int atendidas) {}
+    public record MetricasDisco(long desplazamientoTotal, double tiempoEsperaPromedio,
+                                int totalSolicitudesAtendidas, int[] atendidasPorPolitica,
+                                PuntoDesplazamiento[] serieActual, SeriePolitica[] comparativa) {}
 
     private final Semaphore mutex = new Semaphore(1, true);
     private ConfiguracionDisco config;
@@ -22,11 +28,18 @@ public final class DiscoSimulado implements IComponenteReloj {
     private int cabezal;
     private Direccion direccion = Direccion.ASCENDENTE;
     private final ListaEnlazada<SolicitudDisco> cola = new ListaEnlazada<>();
+    private final ListaEnlazada<Long> ciclosLlegada = new ListaEnlazada<>();
     private final Consumer<String> registrarEvento;
     private PoliticaDisco politica;
     private SolicitudDisco activa;
     private boolean barridoAscendente = true;
     private long desplazamiento;
+    private long cicloActual = 0;
+    private long sumaEsperaCola = 0;
+    private int solicitudesAtendidasTotal = 0;
+    private final int[] atendidasPorPolitica = new int[PoliticaDisco.values().length];
+    private final ListaEnlazada<PuntoDesplazamiento> historialDesplazamiento = new ListaEnlazada<>();
+    private final SeriePolitica[] seriesComparativas = new SeriePolitica[PoliticaDisco.values().length];
     private long siguienteId = 1;
     private int objetivo = -1;
 
@@ -89,6 +102,7 @@ public final class DiscoSimulado implements IComponenteReloj {
         if (nuevaConfig == null) throw new IllegalArgumentException("Configuración de disco nula.");
         mutex.acquireUninterruptibly();
         try {
+            archivarSerieActualSiTieneDatos();
             this.config = nuevaConfig;
             this.politica = nuevaConfig.politica();
             this.bloques = new Bloque[nuevaConfig.bloques()];
@@ -96,9 +110,14 @@ public final class DiscoSimulado implements IComponenteReloj {
             this.direccion = Direccion.ASCENDENTE;
             this.barridoAscendente = true;
             this.cola.vaciar();
+            this.ciclosLlegada.vaciar();
             this.activa = null;
             this.objetivo = -1;
             this.desplazamiento = 0;
+            this.cicloActual = 0;
+            this.sumaEsperaCola = 0;
+            this.solicitudesAtendidasTotal = 0;
+            this.historialDesplazamiento.vaciar();
             for (int i = 0; i < bloques.length; i++) {
                 bloques[i] = new Bloque(i, i >= bloques.length - nuevaConfig.swap(), null, -1);
             }
@@ -128,6 +147,7 @@ public final class DiscoSimulado implements IComponenteReloj {
             for (int i = datos; i < totalNuevo; i++) {
                 nuevos[i] = new Bloque(i, true, null, -1);
             }
+            archivarSerieActualSiTieneDatos();
             this.config = nuevaConfig;
             this.bloques = nuevos;
             this.politica = nuevaPolitica;
@@ -135,9 +155,14 @@ public final class DiscoSimulado implements IComponenteReloj {
             this.direccion = Direccion.ASCENDENTE;
             this.barridoAscendente = true;
             this.cola.vaciar();
+            this.ciclosLlegada.vaciar();
             this.activa = null;
             this.objetivo = -1;
             this.desplazamiento = 0;
+            this.cicloActual = 0;
+            this.sumaEsperaCola = 0;
+            this.solicitudesAtendidasTotal = 0;
+            this.historialDesplazamiento.vaciar();
         } finally {
             mutex.release();
         }
@@ -311,6 +336,7 @@ public final class DiscoSimulado implements IComponenteReloj {
         try {
             var solicitud = new SolicitudDisco(siguienteId++, cabezal, Operacion.ESCRITURA, ruta, true);
             cola.agregar(solicitud);
+            ciclosLlegada.agregar(cicloActual);
             return solicitud;
         } finally {
             mutex.release();
@@ -324,6 +350,7 @@ public final class DiscoSimulado implements IComponenteReloj {
             if (tipo == null) throw new IllegalArgumentException("Indique una operación.");
             SolicitudDisco solicitud = new SolicitudDisco(siguienteId++, inicio, tipo, bloques[inicio].ocupante());
             cola.agregar(solicitud);
+            ciclosLlegada.agregar(cicloActual);
             return solicitud;
         } finally {
             mutex.release();
@@ -342,6 +369,9 @@ public final class DiscoSimulado implements IComponenteReloj {
             for (int i = 0; i < cola.obtenerTamano(); i++) {
                 if (cola.obtener(i).id() == id) {
                     cola.eliminarEn(i);
+                    if (i < ciclosLlegada.obtenerTamano()) {
+                        ciclosLlegada.eliminarEn(i);
+                    }
                     return;
                 }
             }
@@ -371,16 +401,26 @@ public final class DiscoSimulado implements IComponenteReloj {
         SolicitudDisco terminada = null;
         mutex.acquireUninterruptibly();
         try {
+            this.cicloActual = cicloActual;
             if (activa == null) {
-                if (cola.estaVacia()) return null;
+                if (cola.estaVacia()) {
+                    registrarPuntoDesplazamiento(cicloActual);
+                    return null;
+                }
                 int limiteSuperior = limiteBarridoActual();
                 IPoliticaDisco.Decision decision = politica.elegir(cola, cabezal, limiteSuperior, barridoAscendente);
                 if (decision.indice() < 0) {
                     if (decision.salto()) cabezal = decision.destino();
                     else moverHacia(decision.destino());
+                    registrarPuntoDesplazamiento(cicloActual);
                     return null;
                 }
                 activa = cola.eliminarEn(decision.indice());
+                long llegada = decision.indice() < ciclosLlegada.obtenerTamano()
+                        ? ciclosLlegada.eliminarEn(decision.indice()) : cicloActual;
+                sumaEsperaCola += Math.max(0L, cicloActual - llegada);
+                solicitudesAtendidasTotal++;
+                atendidasPorPolitica[politica.ordinal()]++;
                 objetivo = activa.inicio();
                 // Mantener el sentido del barrido mientras se recorre la cadena del archivo.
                 if (objetivo != cabezal) barridoAscendente = objetivo > cabezal;
@@ -395,11 +435,73 @@ public final class DiscoSimulado implements IComponenteReloj {
                     activa = null;
                 }
             }
+            registrarPuntoDesplazamiento(cicloActual);
         } finally {
             mutex.release();
         }
         if (evento != null) registrarEvento.accept(evento);
         return terminada;
+    }
+
+    private void registrarPuntoDesplazamiento(long ciclo) {
+        if (historialDesplazamiento.obtenerTamano() >= 2000) {
+            historialDesplazamiento.eliminarEn(0);
+        }
+        historialDesplazamiento.agregar(new PuntoDesplazamiento(ciclo, desplazamiento, politica));
+    }
+
+    private void archivarSerieActualSiTieneDatos() {
+        int n = historialDesplazamiento.obtenerTamano();
+        if (n == 0 || (desplazamiento == 0 && solicitudesAtendidasTotal == 0)) {
+            return;
+        }
+        PuntoDesplazamiento[] puntos = new PuntoDesplazamiento[n];
+        for (int i = 0; i < n; i++) {
+            puntos[i] = historialDesplazamiento.obtener(i);
+        }
+        double esperaProm = solicitudesAtendidasTotal > 0
+                ? (double) sumaEsperaCola / solicitudesAtendidasTotal : 0.0;
+        seriesComparativas[politica.ordinal()] = new SeriePolitica(
+                politica, puntos, desplazamiento, esperaProm, solicitudesAtendidasTotal);
+    }
+
+    /** Limpia las series comparativas archivadas para iniciar una nueva comparación entre políticas. */
+    public void limpiarComparativa() {
+        mutex.acquireUninterruptibly();
+        try {
+            for (int i = 0; i < seriesComparativas.length; i++) {
+                seriesComparativas[i] = null;
+            }
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Devuelve una instantánea thread-safe de todas las métricas del disco y series para graficar. */
+    public MetricasDisco getMetricas() {
+        mutex.acquireUninterruptibly();
+        try {
+            double esperaProm = solicitudesAtendidasTotal > 0
+                    ? (double) sumaEsperaCola / solicitudesAtendidasTotal : 0.0;
+            int n = historialDesplazamiento.obtenerTamano();
+            PuntoDesplazamiento[] serieActual = new PuntoDesplazamiento[n];
+            for (int i = 0; i < n; i++) {
+                serieActual[i] = historialDesplazamiento.obtener(i);
+            }
+            int cantComp = 0;
+            for (SeriePolitica sp : seriesComparativas) {
+                if (sp != null) cantComp++;
+            }
+            SeriePolitica[] comp = new SeriePolitica[cantComp];
+            int idx = 0;
+            for (SeriePolitica sp : seriesComparativas) {
+                if (sp != null) comp[idx++] = sp;
+            }
+            return new MetricasDisco(desplazamiento, esperaProm, solicitudesAtendidasTotal,
+                    atendidasPorPolitica.clone(), serieActual, comp);
+        } finally {
+            mutex.release();
+        }
     }
 
     private int limiteBarridoActual() {
