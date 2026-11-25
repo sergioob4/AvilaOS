@@ -310,7 +310,8 @@ public class DialogoMetricas extends JDialog {
         lblT.setForeground(COLOR_MUTED);
 
         JLabel lblV = new JLabel(valor);
-        lblV.setFont(new Font("Consolas", Font.BOLD, 15));
+        lblV.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        lblV.setVerticalAlignment(SwingConstants.CENTER);
         lblV.setForeground(colorValor);
 
         box.add(lblT, BorderLayout.NORTH);
@@ -324,10 +325,12 @@ public class DialogoMetricas extends JDialog {
 
         JLabel l = new JLabel(label);
         l.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        l.setVerticalAlignment(SwingConstants.CENTER);
         l.setForeground(COLOR_MUTED);
 
         JLabel v = new JLabel(valor);
         v.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        v.setVerticalAlignment(SwingConstants.CENTER);
         v.setForeground(Color.WHITE);
 
         p.add(l, BorderLayout.WEST);

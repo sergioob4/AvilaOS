@@ -374,10 +374,12 @@ public class PanelComputador extends JPanel {
         JLabel lblRamTitulo = new JLabel("Memoria Principal (RAM):");
         lblRamTitulo.setFont(new Font("Segoe UI", Font.BOLD, 11));
         lblRamTitulo.setForeground(COLOR_TEXTO_TITULO);
+        lblRamTitulo.setVerticalAlignment(SwingConstants.CENTER);
 
         lblMemoriaInfo = new JLabel("0 MB / 0 MB (0% libre)");
-        lblMemoriaInfo.setFont(new Font("Consolas", Font.BOLD, 11));
+        lblMemoriaInfo.setFont(new Font("Segoe UI", Font.BOLD, 11));
         lblMemoriaInfo.setForeground(COLOR_TEXTO_SECUNDARIO);
+        lblMemoriaInfo.setVerticalAlignment(SwingConstants.CENTER);
 
         panelRamTop.add(lblRamTitulo, BorderLayout.WEST);
         panelRamTop.add(lblMemoriaInfo, BorderLayout.EAST);
@@ -481,8 +483,9 @@ public class PanelComputador extends JPanel {
 
     private JLabel crearLabelValor(String textoInicial) {
         JLabel lbl = new JLabel(textoInicial);
-        lbl.setFont(new Font("Consolas", Font.BOLD, 12));
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
         lbl.setForeground(COLOR_TEXTO_VALOR);
+        lbl.setVerticalAlignment(SwingConstants.CENTER);
         return lbl;
     }
 

@@ -153,7 +153,8 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         lblTitulo.setForeground(new Color(96, 165, 250));
 
         lblCicloGlobal = new JLabel("  Ciclo Global: 0  ");
-        lblCicloGlobal.setFont(new Font("Consolas", Font.BOLD, 15));
+        lblCicloGlobal.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblCicloGlobal.setVerticalAlignment(SwingConstants.CENTER);
         lblCicloGlobal.setOpaque(true);
         lblCicloGlobal.setBackground(new Color(30, 41, 59));
         lblCicloGlobal.setForeground(Color.WHITE);
@@ -196,9 +197,10 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         sliderVelocidad.setPreferredSize(new Dimension(110, 26));
 
         lblValorVelocidad = new JLabel(sliderVelocidad.getValue() + " ms");
-        lblValorVelocidad.setFont(new Font("Consolas", Font.BOLD, 12));
+        lblValorVelocidad.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblValorVelocidad.setVerticalAlignment(SwingConstants.CENTER);
         lblValorVelocidad.setForeground(COLOR_TEXTO_TITULO);
-        lblValorVelocidad.setPreferredSize(new Dimension(70, 24));
+        lblValorVelocidad.setPreferredSize(new Dimension(64, 26));
 
         sliderVelocidad.addChangeListener(e -> {
             int ms = sliderVelocidad.getValue();
