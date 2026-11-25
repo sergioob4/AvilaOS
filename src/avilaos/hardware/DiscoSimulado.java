@@ -17,8 +17,8 @@ public final class DiscoSimulado implements IComponenteReloj {
                         long desplazamiento) {}
 
     private final Semaphore mutex = new Semaphore(1, true);
-    private final ConfiguracionDisco config;
-    private final Bloque[] bloques;
+    private ConfiguracionDisco config;
+    private Bloque[] bloques;
     private int cabezal;
     private Direccion direccion = Direccion.ASCENDENTE;
     private final ListaEnlazada<SolicitudDisco> cola = new ListaEnlazada<>();
@@ -47,6 +47,118 @@ public final class DiscoSimulado implements IComponenteReloj {
 
     public int asignarArchivo(String ruta, int cantidad) {
         return asignar(ruta, cantidad, false);
+    }
+
+    /**
+     * Asigna bloques contiguos encadenados exactamente a partir de {@code startBlock}
+     * (usado al cargar el estado inicial del sistema de archivos desde JSON).
+     */
+    public int asignarArchivoEn(String ruta, int startBlock, int cantidad) {
+        if (ruta == null || ruta.isBlank() || cantidad < 1) {
+            throw new IllegalArgumentException("Indique ruta y cantidad positiva de bloques.");
+        }
+        mutex.acquireUninterruptibly();
+        try {
+            int limiteDatos = bloques.length - config.swap();
+            if (startBlock < 0 || startBlock + cantidad > limiteDatos) {
+                throw new IllegalArgumentException("Rango de bloques [" + startBlock + ".."
+                        + (startBlock + cantidad - 1) + "] fuera del área de datos (0.." + (limiteDatos - 1) + ").");
+            }
+            for (Bloque b : bloques) {
+                if (!b.swap() && ruta.equals(b.ocupante())) {
+                    throw new IllegalStateException("Ya existen bloques asignados para " + ruta);
+                }
+            }
+            for (int i = startBlock; i < startBlock + cantidad; i++) {
+                if (bloques[i].ocupante() != null) {
+                    throw new IllegalStateException("El bloque " + i + " ya está ocupado por " + bloques[i].ocupante());
+                }
+            }
+            for (int i = startBlock; i < startBlock + cantidad; i++) {
+                int siguiente = (i + 1 < startBlock + cantidad) ? (i + 1) : -1;
+                bloques[i] = new Bloque(i, false, ruta, siguiente);
+            }
+            return startBlock;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Reconstruye por completo el disco con una nueva configuración (al cargar JSON 1). */
+    public void reconfigurar(ConfiguracionDisco nuevaConfig) {
+        if (nuevaConfig == null) throw new IllegalArgumentException("Configuración de disco nula.");
+        mutex.acquireUninterruptibly();
+        try {
+            this.config = nuevaConfig;
+            this.politica = nuevaConfig.politica();
+            this.bloques = new Bloque[nuevaConfig.bloques()];
+            this.cabezal = nuevaConfig.cabezal();
+            this.direccion = Direccion.ASCENDENTE;
+            this.barridoAscendente = true;
+            this.cola.vaciar();
+            this.activa = null;
+            this.objetivo = -1;
+            this.desplazamiento = 0;
+            for (int i = 0; i < bloques.length; i++) {
+                bloques[i] = new Bloque(i, i >= bloques.length - nuevaConfig.swap(), null, -1);
+            }
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Ajusta el tamaño del área de swap y la política inicial del disco (al cargar JSON 2)
+     * preservando todos los bloques de datos/archivos ya cargados en 0..datos-1.
+     */
+    public void ajustarSwapYPolitica(int swapSizeBlocks, PoliticaDisco nuevaPolitica) {
+        if (swapSizeBlocks < 0) throw new IllegalArgumentException("El tamaño de swap no puede ser negativo.");
+        if (nuevaPolitica == null) throw new IllegalArgumentException("Política de disco nula.");
+        mutex.acquireUninterruptibly();
+        try {
+            int datos = bloques.length - config.swap();
+            int totalNuevo = datos + swapSizeBlocks;
+            int cabezalInicial = Math.min(config.cabezal(), Math.max(0, totalNuevo - 1));
+            int velocidad = Math.min(config.velocidad(), totalNuevo);
+            ConfiguracionDisco nuevaConfig = new ConfiguracionDisco(totalNuevo, swapSizeBlocks, cabezalInicial, velocidad, nuevaPolitica);
+            Bloque[] nuevos = new Bloque[totalNuevo];
+            for (int i = 0; i < datos; i++) {
+                nuevos[i] = bloques[i];
+            }
+            for (int i = datos; i < totalNuevo; i++) {
+                nuevos[i] = new Bloque(i, true, null, -1);
+            }
+            this.config = nuevaConfig;
+            this.bloques = nuevos;
+            this.politica = nuevaPolitica;
+            this.cabezal = cabezalInicial;
+            this.direccion = Direccion.ASCENDENTE;
+            this.barridoAscendente = true;
+            this.cola.vaciar();
+            this.activa = null;
+            this.objetivo = -1;
+            this.desplazamiento = 0;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public ConfiguracionDisco getConfiguracion() {
+        mutex.acquireUninterruptibly();
+        try {
+            return config;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public int getBloquesDatosTotales() {
+        mutex.acquireUninterruptibly();
+        try {
+            return bloques.length - config.swap();
+        } finally {
+            mutex.release();
+        }
     }
 
     /** Actualiza las etiquetas del mapa al renombrar un archivo o un directorio hermano. */
@@ -261,7 +373,8 @@ public final class DiscoSimulado implements IComponenteReloj {
         try {
             if (activa == null) {
                 if (cola.estaVacia()) return null;
-                IPoliticaDisco.Decision decision = politica.elegir(cola, cabezal, bloques.length - 1, barridoAscendente);
+                int limiteSuperior = limiteBarridoActual();
+                IPoliticaDisco.Decision decision = politica.elegir(cola, cabezal, limiteSuperior, barridoAscendente);
                 if (decision.indice() < 0) {
                     if (decision.salto()) cabezal = decision.destino();
                     else moverHacia(decision.destino());
@@ -287,6 +400,16 @@ public final class DiscoSimulado implements IComponenteReloj {
         }
         if (evento != null) registrarEvento.accept(evento);
         return terminada;
+    }
+
+    private int limiteBarridoActual() {
+        int limiteDatos = Math.max(0, bloques.length - config.swap() - 1);
+        for (int i = 0; i < cola.obtenerTamano(); i++) {
+            if (cola.obtener(i).inicio() > limiteDatos) {
+                return bloques.length - 1;
+            }
+        }
+        return cabezal > limiteDatos ? bloques.length - 1 : limiteDatos;
     }
 
     private void moverHacia(int destino) {

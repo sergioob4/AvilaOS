@@ -12,8 +12,10 @@ final class PanelDisco extends JPanel {
     private final DiscoSimulado disco;
     private final JLabel estado = new JLabel();
     private final JLabel detalle = new JLabel("Seleccione un bloque para inspeccionarlo.");
-    private final JButton[] celdas;
+    private final JPanel mapa = new JPanel(new GridLayout(0, 10, 2, 2));
+    private JButton[] celdas = new JButton[0];
     private final JComboBox<PoliticaDisco> politica = new JComboBox<>(PoliticaDisco.values());
+    private boolean sincronizandoPolitica = false;
     private final JList<SolicitudDisco> pendientes = new JList<>();
     private final JLabel activa = new JLabel();
     private final JTabbedPane vistas = new JTabbedPane();
@@ -46,24 +48,16 @@ final class PanelDisco extends JPanel {
     PanelDisco(DiscoSimulado disco) {
         super(new BorderLayout(4, 4));
         this.disco = disco;
-        celdas = new JButton[disco.vista().bloques().length];
-        JPanel mapa = new JPanel(new GridLayout(0, 10, 2, 2));
-        for (int i = 0; i < celdas.length; i++) {
-            final int numero = i;
-            JButton boton = new JButton(String.valueOf(i));
-            boton.setContentAreaFilled(false);
-            boton.setOpaque(true);
-            boton.setForeground(Color.WHITE);
-            boton.setPreferredSize(new Dimension(52, 27));
-            boton.addActionListener(e -> { seleccionado = numero; actualizar(); });
-            celdas[i] = boton;
-            mapa.add(boton);
-        }
+        reconstruirMapa(disco.vista().bloques().length);
         JPanel cabecera = new JPanel(new BorderLayout());
         JPanel controles = new JPanel(new FlowLayout(FlowLayout.LEFT));
         controles.add(new JLabel("Política de disco"));
         politica.setSelectedItem(disco.vista().politica());
-        politica.addActionListener(e -> disco.cambiarPolitica((PoliticaDisco) politica.getSelectedItem()));
+        politica.addActionListener(e -> {
+            if (!sincronizandoPolitica && politica.getSelectedItem() instanceof PoliticaDisco p) {
+                disco.cambiarPolitica(p);
+            }
+        });
         controles.add(politica);
         controles.add(activa);
         cabecera.add(controles, BorderLayout.NORTH);
@@ -76,8 +70,38 @@ final class PanelDisco extends JPanel {
         actualizar();
     }
 
+    private void reconstruirMapa(int cantidadBloques) {
+        mapa.removeAll();
+        celdas = new JButton[cantidadBloques];
+        for (int i = 0; i < celdas.length; i++) {
+            final int numero = i;
+            JButton boton = new JButton(String.valueOf(i));
+            boton.setContentAreaFilled(false);
+            boton.setOpaque(true);
+            boton.setForeground(Color.WHITE);
+            boton.setPreferredSize(new Dimension(52, 27));
+            boton.addActionListener(e -> { seleccionado = numero; actualizar(); });
+            celdas[i] = boton;
+            mapa.add(boton);
+        }
+        if (seleccionado >= cantidadBloques) {
+            seleccionado = -1;
+            detalle.setText("Seleccione un bloque para inspeccionarlo.");
+        }
+        mapa.revalidate();
+        mapa.repaint();
+    }
+
     void actualizar() {
         DiscoSimulado.Vista vista = disco.vista();
+        if (vista.bloques().length != celdas.length) {
+            reconstruirMapa(vista.bloques().length);
+        }
+        if (politica.getSelectedItem() != vista.politica()) {
+            sincronizandoPolitica = true;
+            politica.setSelectedItem(vista.politica());
+            sincronizandoPolitica = false;
+        }
         pendientes.setListData(vista.pendientes());
         vistas.setTitleAt(1, "Cola de E/S (" + vista.pendientes().length + ")");
         activa.setText("En servicio: " + (vista.activa() == null ? "—" : vista.activa())

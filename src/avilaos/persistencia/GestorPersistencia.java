@@ -1,22 +1,31 @@
 package avilaos.persistencia;
 
+import avilaos.enums.PoliticaDisco;
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
 import avilaos.enums.OperacionArchivo;
 import avilaos.enums.ModoUsuario;
 import avilaos.enums.Permiso;
+import avilaos.hardware.ConfiguracionDisco;
+import avilaos.hardware.DiscoSimulado;
 import avilaos.proceso.PeticionArchivo;
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.BufferAcotado;
 import avilaos.sistema.ClusterDistribuido;
 import avilaos.sistema.Computador;
+import avilaos.sistemaarchivos.Archivo;
+import avilaos.sistemaarchivos.Directorio;
+import avilaos.sistemaarchivos.NodoSistemaArchivos;
+import avilaos.sistemaarchivos.SistemaArchivos;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 /**
  * Gestor de persistencia para guardar y cargar escenarios de simulación en formato CSV o JSON.
@@ -883,5 +892,301 @@ public class GestorPersistencia {
     private static ListaEnlazada<String> extraerObjetosArrayJson(String json, String nombreArray) throws IOException {
         String valor = ValidadorJson.miembro(json, nombreArray);
         return valor == null ? new ListaEnlazada<>() : ValidadorJson.objetos(valor);
+    }
+
+    // =========================================================================
+    // Proyecto 2: Persistencia obligatoria de los 2 JSON (Sistema de Archivos y Procesos)
+    // =========================================================================
+
+    /**
+     * Exporta el estado actual del disco y del sistema de archivos jerárquico
+     * en el formato JSON oficial del Proyecto 2 ({@code diskConfig} + {@code fileSystem}).
+     */
+    public static void exportarSistemaArchivosJson(File archivo, Computador comp) throws IOException {
+        if (comp == null) throw new IOException("Computador inválido.");
+        DiscoSimulado disco = comp.getDisco();
+        SistemaArchivos fs = comp.getSistemaArchivos();
+        DiscoSimulado.Vista vista = disco.vista();
+        int totalBlocks = disco.getBloquesDatosTotales();
+        int initialHead = Math.min(vista.cabezal(), Math.max(0, totalBlocks - 1));
+
+        ListaEnlazada<NodoSistemaArchivos> nodos = new ListaEnlazada<>();
+        recolectarPreorden(fs.getRaiz(), nodos);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"diskConfig\": {\n");
+        sb.append("    \"totalBlocks\": ").append(totalBlocks).append(",\n");
+        sb.append("    \"initialHead\": ").append(initialHead).append("\n");
+        sb.append("  },\n");
+        sb.append("  \"fileSystem\": [\n");
+        int total = nodos.obtenerTamano();
+        for (int i = 0; i < total; i++) {
+            NodoSistemaArchivos nodo = nodos.obtener(i);
+            sb.append("    {\n");
+            sb.append("      \"path\": \"").append(escaparJson(nodo.getRuta())).append("\",\n");
+            if (nodo instanceof Archivo arch) {
+                sb.append("      \"type\": \"FILE\",\n");
+                sb.append("      \"startBlock\": ").append(arch.getPrimerBloque()).append(",\n");
+                sb.append("      \"blocks\": ").append(arch.getTamanoBloques()).append(",\n");
+            } else {
+                sb.append("      \"type\": \"DIRECTORY\",\n");
+            }
+            sb.append("      \"owner\": \"").append(escaparJson(nodo.getDueno())).append("\",\n");
+            String perm = nodo.getPermiso() == Permiso.PUBLICO ? "public" : "private";
+            sb.append("      \"permissions\": \"").append(perm).append("\"\n");
+            sb.append("    }").append(i + 1 < total ? "," : "").append("\n");
+        }
+        sb.append("  ]\n");
+        sb.append("}\n");
+
+        Files.writeString(archivo.toPath(), sb.toString(), StandardCharsets.UTF_8);
+    }
+
+    private static void recolectarPreorden(Directorio dir, ListaEnlazada<NodoSistemaArchivos> destino) {
+        int hijos = dir.getCantidadHijos();
+        for (int i = 0; i < hijos; i++) {
+            NodoSistemaArchivos hijo = dir.getHijo(i);
+            destino.agregar(hijo);
+            if (hijo instanceof Directorio sub) {
+                recolectarPreorden(sub, destino);
+            }
+        }
+    }
+
+    /**
+     * Carga el JSON 1 (Sistema de Archivos: {@code diskConfig} + {@code fileSystem})
+     * inicializando el disco, la posición del cabezal y la jerarquía de directorios y archivos.
+     *
+     * @return cantidad de elementos (directorios + archivos) cargados
+     */
+    public static int importarSistemaArchivosJson(File archivo, Computador comp) throws IOException {
+        if (comp == null) throw new IOException("Computador inválido.");
+        String json = Files.readString(archivo.toPath(), StandardCharsets.UTF_8);
+        ValidadorJson.validarObjeto(json);
+
+        String diskConfigStr = ValidadorJson.miembro(json, "diskConfig");
+        if (diskConfigStr == null || !diskConfigStr.startsWith("{")) {
+            throw new IOException("Falta el objeto obligatorio 'diskConfig' en el JSON del sistema de archivos.");
+        }
+        int totalBlocks = leerEnteroObligatorio(diskConfigStr, "totalBlocks", 1, 500);
+        int initialHead = leerEnteroObligatorio(diskConfigStr, "initialHead", 0, totalBlocks - 1);
+
+        String fsArrayStr = ValidadorJson.miembro(json, "fileSystem");
+        if (fsArrayStr == null || !fsArrayStr.startsWith("[")) {
+            throw new IOException("Falta el arreglo obligatorio 'fileSystem' en el JSON del sistema de archivos.");
+        }
+        ListaEnlazada<String> entradas = ValidadorJson.objetos(fsArrayStr);
+
+        // Conservar swap y política previos si ya existían, asegurando capacidad totalBlocks + swap
+        ConfiguracionDisco prevCfg = comp.getDisco().getConfiguracion();
+        int swapActual = prevCfg.swap();
+        int totalDisco = totalBlocks + swapActual;
+        int velocidad = Math.min(prevCfg.velocidad(), totalDisco);
+        ConfiguracionDisco nuevaCfg = new ConfiguracionDisco(totalDisco, swapActual, initialHead, velocidad, prevCfg.politica());
+
+        comp.getSo().reiniciarProcesos();
+        comp.getDisco().reconfigurar(nuevaCfg);
+        comp.getSistemaArchivos().reiniciar();
+
+        // Primera pasada: directorios
+        int cargados = 0;
+        for (int i = 0; i < entradas.obtenerTamano(); i++) {
+            String item = entradas.obtener(i);
+            String type = leerTextoObligatorio(item, "type").toUpperCase();
+            if ("DIRECTORY".equals(type)) {
+                String path = leerTextoObligatorio(item, "path");
+                String owner = leerTextoObligatorio(item, "owner");
+                Permiso perm = parsearPermisoJson(leerTextoObligatorio(item, "permissions"));
+                try {
+                    comp.getSistemaArchivos().cargarDirectorioDesdeJson(path, owner, perm);
+                    cargados++;
+                } catch (RuntimeException ex) {
+                    throw new IOException("Error cargando directorio " + path + ": " + ex.getMessage(), ex);
+                }
+            } else if (!"FILE".equals(type)) {
+                throw new IOException("Tipo de nodo inválido en fileSystem: '" + type + "' (use FILE o DIRECTORY).");
+            }
+        }
+
+        // Segunda pasada: archivos con su startBlock exacto
+        for (int i = 0; i < entradas.obtenerTamano(); i++) {
+            String item = entradas.obtener(i);
+            String type = leerTextoObligatorio(item, "type").toUpperCase();
+            if ("FILE".equals(type)) {
+                String path = leerTextoObligatorio(item, "path");
+                String owner = leerTextoObligatorio(item, "owner");
+                Permiso perm = parsearPermisoJson(leerTextoObligatorio(item, "permissions"));
+                int startBlock = leerEnteroObligatorio(item, "startBlock", 0, totalBlocks - 1);
+                int blocks = leerEnteroObligatorio(item, "blocks", 1, totalBlocks);
+                try {
+                    comp.getSistemaArchivos().cargarArchivoDesdeJson(path, owner, perm, startBlock, blocks);
+                    cargados++;
+                } catch (RuntimeException ex) {
+                    throw new IOException("Error cargando archivo " + path + ": " + ex.getMessage(), ex);
+                }
+            }
+        }
+
+        return cargados;
+    }
+
+    /**
+     * Carga el JSON 2 (Procesos y Configuración: {@code globalConfig} + {@code computer} + {@code processes}).
+     * Reinicia procesos y reloj preservando intacto el sistema de archivos cargado en el disco.
+     *
+     * @return cantidad de procesos de E/S cargados y admitidos
+     */
+    public static int importarProcesosConfigJson(File archivo, ClusterDistribuido cluster) throws IOException {
+        if (cluster == null || cluster.getCantidadComputadores() < 1) {
+            throw new IOException("No hay computador disponible en el clúster.");
+        }
+        String json = Files.readString(archivo.toPath(), StandardCharsets.UTF_8);
+        ValidadorJson.validarObjeto(json);
+
+        String globalStr = ValidadorJson.miembro(json, "globalConfig");
+        if (globalStr == null || !globalStr.startsWith("{")) {
+            throw new IOException("Falta el objeto obligatorio 'globalConfig' en el JSON de procesos.");
+        }
+        int cycleDurationMs = leerEnteroObligatorio(globalStr, "cycleDurationMs", 10, 60000);
+        int swapSizeBlocks = leerEnteroObligatorio(globalStr, "swapSizeBlocks", 0, 500);
+        PoliticaDisco politicaDisco = parsearPoliticaDiscoJson(leerTextoObligatorio(globalStr, "initialDiskPolicy"));
+
+        String compStr = ValidadorJson.miembro(json, "computer");
+        if (compStr == null || !compStr.startsWith("{")) {
+            throw new IOException("Falta el objeto obligatorio 'computer' en el JSON de procesos.");
+        }
+        int ramCapacity = leerEnteroObligatorio(compStr, "ramCapacity", 1, 65536);
+        PoliticaPlanificacion politicaCpu = parsearPoliticaCpuJson(leerTextoObligatorio(compStr, "policy"));
+        int quantum = leerEnteroObligatorio(compStr, "quantum", 0, 100);
+
+        String procsStr = ValidadorJson.miembro(json, "processes");
+        if (procsStr == null || !procsStr.startsWith("[")) {
+            throw new IOException("Falta el arreglo obligatorio 'processes' en el JSON de procesos.");
+        }
+        ListaEnlazada<String> listaProcesos = ValidadorJson.objetos(procsStr);
+
+        Computador comp = cluster.getComputadores().obtener(0);
+
+        // Validar procesos antes de mutar el estado del computador
+        ListaEnlazada<Proceso> preparados = new ListaEnlazada<>();
+        for (int i = 0; i < listaProcesos.obtenerTamano(); i++) {
+            String obj = listaProcesos.obtener(i);
+            String name = leerTextoObligatorio(obj, "name");
+            int memory = leerEnteroObligatorio(obj, "memory", 1, ramCapacity);
+            int deadline = leerEnteroObligatorio(obj, "deadline", 1, 100000);
+            int instructions = leerEnteroObligatorio(obj, "instructions", 1, 100000);
+            String targetPath = leerTextoObligatorio(obj, "targetPath");
+            if (!targetPath.startsWith("/")) {
+                throw new IOException("La ruta targetPath del proceso " + name + " debe iniciar con '/'.");
+            }
+            OperacionArchivo op = parsearOperacionJson(leerTextoObligatorio(obj, "operation"));
+            int prioridad = leerEnteroOpcional(obj, "priority", 1, 1, 10);
+            String owner = extraerValorJson(obj, "owner");
+            if (owner.isBlank()) owner = SistemaArchivos.ADMINISTRADOR;
+
+            int bloquesCrear = 0;
+            Permiso permisoCrear = null;
+            String nuevoNombre = null;
+            if (op == OperacionArchivo.CREAR) {
+                bloquesCrear = leerEnteroOpcional(obj, "blocks", 1, 1, 500);
+                String permStr = extraerValorJson(obj, "permissions");
+                permisoCrear = permStr.isBlank() ? Permiso.PUBLICO : parsearPermisoJson(permStr);
+            } else if (op == OperacionArchivo.ACTUALIZAR) {
+                String nn = extraerValorJson(obj, "newName");
+                if (nn.isBlank()) {
+                    int sep = targetPath.lastIndexOf('/');
+                    nn = sep >= 0 && sep + 1 < targetPath.length() ? targetPath.substring(sep + 1) : "actualizado";
+                }
+                nuevoNombre = nn;
+            }
+
+            PeticionArchivo peticion = new PeticionArchivo(op, targetPath, owner,
+                    ModoUsuario.ADMINISTRADOR, bloquesCrear, permisoCrear, nuevoNombre);
+            preparados.agregar(new Proceso(name, comp.getId(), TipoProceso.IO_BOUND,
+                    prioridad, memory, deadline, instructions, peticion));
+        }
+
+        // Aplicar configuración preservando los archivos del disco
+        cluster.getRelojGlobal().reiniciar();
+        cluster.getRelojGlobal().setDuracionCicloMs(cycleDurationMs);
+        comp.getSo().reiniciarProcesos();
+        comp.getMemoria().reconfigurar(ramCapacity);
+        comp.getDisco().ajustarSwapYPolitica(swapSizeBlocks, politicaDisco);
+        comp.cambiarPolitica(politicaCpu);
+        if (quantum > 0) {
+            comp.cambiarQuantum(quantum);
+        }
+
+        for (int i = 0; i < preparados.obtenerTamano(); i++) {
+            comp.admitirProceso(preparados.obtener(i), 0);
+        }
+        return preparados.obtenerTamano();
+    }
+
+    private static String leerTextoObligatorio(String obj, String campo) throws IOException {
+        validarTextoJson(obj, campo, true);
+        return extraerValorJson(obj, campo).trim();
+    }
+
+    private static int leerEnteroObligatorio(String obj, String campo, int min, int max) throws IOException {
+        String bruto = ValidadorJson.miembro(obj, campo);
+        if (bruto == null) {
+            throw new IOException("Falta el campo numérico obligatorio '" + campo + "'.");
+        }
+        int valor;
+        try {
+            valor = Integer.parseInt(bruto.trim());
+        } catch (NumberFormatException ex) {
+            throw new IOException("El campo '" + campo + "' debe ser un entero válido (recibido: " + bruto + ").");
+        }
+        if (valor < min || valor > max) {
+            throw new IOException("El campo '" + campo + "' (" + valor + ") está fuera del rango [" + min + ", " + max + "].");
+        }
+        return valor;
+    }
+
+    private static int leerEnteroOpcional(String obj, String campo, int defecto, int min, int max) throws IOException {
+        String bruto = ValidadorJson.miembro(obj, campo);
+        if (bruto == null) return defecto;
+        return leerEnteroObligatorio(obj, campo, min, max);
+    }
+
+    private static Permiso parsearPermisoJson(String texto) throws IOException {
+        return switch (texto.trim().toUpperCase()) {
+            case "PUBLIC", "PUBLICO", "PÚBLICO" -> Permiso.PUBLICO;
+            case "PRIVATE", "PRIVADO" -> Permiso.PRIVADO;
+            default -> throw new IOException("Permiso inválido: '" + texto + "' (use public o private).");
+        };
+    }
+
+    private static PoliticaDisco parsearPoliticaDiscoJson(String texto) throws IOException {
+        return switch (texto.trim().toUpperCase().replace('-', '_')) {
+            case "FIFO" -> PoliticaDisco.FIFO;
+            case "SSTF" -> PoliticaDisco.SSTF;
+            case "SCAN" -> PoliticaDisco.SCAN;
+            case "C_SCAN", "CSCAN" -> PoliticaDisco.C_SCAN;
+            default -> throw new IOException("Política de disco inválida: '" + texto + "'.");
+        };
+    }
+
+    private static PoliticaPlanificacion parsearPoliticaCpuJson(String texto) throws IOException {
+        return switch (texto.trim().toUpperCase().replace('-', '_')) {
+            case "FCFS" -> PoliticaPlanificacion.FCFS;
+            case "ROUND_ROBIN", "RR" -> PoliticaPlanificacion.ROUND_ROBIN;
+            case "PRIORIDADES_APROPIATIVAS", "PRIORIDADES", "PRIORITY" -> PoliticaPlanificacion.PRIORIDADES_APROPIATIVAS;
+            case "EDF" -> PoliticaPlanificacion.EDF;
+            default -> throw new IOException("Política de CPU inválida: '" + texto + "'.");
+        };
+    }
+
+    private static OperacionArchivo parsearOperacionJson(String texto) throws IOException {
+        return switch (texto.trim().toUpperCase()) {
+            case "READ", "LEER" -> OperacionArchivo.LEER;
+            case "CREATE", "CREAR" -> OperacionArchivo.CREAR;
+            case "UPDATE", "ACTUALIZAR" -> OperacionArchivo.ACTUALIZAR;
+            case "DELETE", "ELIMINAR" -> OperacionArchivo.ELIMINAR;
+            default -> throw new IOException("Operación de archivo inválida: '" + texto + "' (use READ, CREATE, UPDATE o DELETE).");
+        };
     }
 }

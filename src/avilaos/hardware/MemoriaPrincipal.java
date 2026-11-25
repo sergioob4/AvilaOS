@@ -18,7 +18,7 @@ import java.util.concurrent.Semaphore;
 public class MemoriaPrincipal {
 
     /** Capacidad total de memoria RAM en MB. */
-    private final int capacidadTotal;
+    private int capacidadTotal;
 
     /** Cantidad actual de memoria RAM utilizada en MB. */
     private int memoriaUsada;
@@ -101,7 +101,36 @@ public class MemoriaPrincipal {
     }
 
     public int getCapacidadTotal() {
-        return capacidadTotal;
+        adquirir();
+        try {
+            return capacidadTotal;
+        } finally {
+            liberar();
+        }
+    }
+
+    /** Reconfigura la capacidad total de RAM y reinicia su uso a 0 (al cargar configuración JSON). */
+    public void reconfigurar(int nuevaCapacidad) {
+        if (nuevaCapacidad <= 0) {
+            throw new IllegalArgumentException("La capacidad de RAM debe ser mayor a 0 MB.");
+        }
+        adquirir();
+        try {
+            this.capacidadTotal = nuevaCapacidad;
+            this.memoriaUsada = 0;
+        } finally {
+            liberar();
+        }
+    }
+
+    /** Libera toda la memoria ocupada (al reiniciar procesos de la simulación). */
+    public void reiniciarUso() {
+        adquirir();
+        try {
+            this.memoriaUsada = 0;
+        } finally {
+            liberar();
+        }
     }
 
     public int getMemoriaUsada() {
