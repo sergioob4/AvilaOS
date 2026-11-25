@@ -1,6 +1,8 @@
 package avilaos.gui;
 
+import avilaos.enums.PoliticaDisco;
 import avilaos.hardware.CPU;
+import avilaos.hardware.DiscoSimulado;
 import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.BufferAcotado;
 import avilaos.sistema.ClusterDistribuido;
@@ -86,7 +88,13 @@ public class DialogoMetricas extends JDialog {
         panelContenido.add(crearSeccionGlobal(ciclos));
         panelContenido.add(Box.createVerticalStrut(14));
 
-        // 2. Métricas de Sincronización y Buffers Acotados (Requerimiento 4)
+        // 2. Métricas de Disco y Planificación de E/S (Proyecto 2)
+        if (cluster.getCantidadComputadores() > 0) {
+            panelContenido.add(crearSeccionDisco(cluster.getComputadores().obtener(0).getDisco()));
+            panelContenido.add(Box.createVerticalStrut(14));
+        }
+
+        // 3. Métricas de Sincronización y Buffers Acotados (Requerimiento 4)
         panelContenido.add(crearSeccionSincronizacion());
         panelContenido.add(Box.createVerticalStrut(14));
 
@@ -324,6 +332,41 @@ public class DialogoMetricas extends JDialog {
 
         p.add(l, BorderLayout.WEST);
         p.add(v, BorderLayout.EAST);
+        return p;
+    }
+
+    private JPanel crearSeccionDisco(DiscoSimulado disco) {
+        JPanel p = new JPanel(new BorderLayout(10, 10));
+        p.setBackground(COLOR_CARD);
+        p.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(COLOR_BORDE, 1, true),
+                new EmptyBorder(14, 18, 14, 18)
+        ));
+        p.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblSec = new JLabel("Métricas del Disco y Planificación de E/S");
+        lblSec.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblSec.setForeground(new Color(56, 189, 248));
+        p.add(lblSec, BorderLayout.NORTH);
+
+        DiscoSimulado.MetricasDisco m = disco.getMetricas();
+        DiscoSimulado.Vista v = disco.vista();
+
+        JPanel grid = new JPanel(new GridLayout(2, 4, 10, 10));
+        grid.setOpaque(false);
+
+        grid.add(crearMetricaBox("Desplazamiento Total", m.desplazamientoTotal() + " bloques", new Color(56, 189, 248)));
+        grid.add(crearMetricaBox("Espera Prom. Cola E/S", String.format("%.2f ciclos", m.tiempoEsperaPromedio()), COLOR_AMBAR));
+        grid.add(crearMetricaBox("Solicitudes Atendidas", String.valueOf(m.totalSolicitudesAtendidas()), COLOR_VERDE));
+        grid.add(crearMetricaBox("Política de Disco Activa", v.politica().toString(), COLOR_TITULO));
+
+        int[] porPolitica = m.atendidasPorPolitica();
+        grid.add(crearMetricaBox("Atendidas (FIFO)", String.valueOf(porPolitica[PoliticaDisco.FIFO.ordinal()]), new Color(239, 83, 80)));
+        grid.add(crearMetricaBox("Atendidas (SSTF)", String.valueOf(porPolitica[PoliticaDisco.SSTF.ordinal()]), COLOR_VERDE));
+        grid.add(crearMetricaBox("Atendidas (SCAN)", String.valueOf(porPolitica[PoliticaDisco.SCAN.ordinal()]), COLOR_AMBAR));
+        grid.add(crearMetricaBox("Atendidas (C-SCAN)", String.valueOf(porPolitica[PoliticaDisco.C_SCAN.ordinal()]), new Color(56, 189, 248)));
+
+        p.add(grid, BorderLayout.CENTER);
         return p;
     }
 

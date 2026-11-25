@@ -55,6 +55,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
     private BotonEstilizado btnNuevoProceso;
     private BotonEstilizado btnMetricas;
     private BotonEstilizado btnGraficoCpu;
+    private BotonEstilizado btnGraficoDisco;
     private BotonEstilizado btnCargarFsJson;
     private BotonEstilizado btnGuardarFsJson;
     private BotonEstilizado btnCargarProcesosJson;
@@ -281,6 +282,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         btnCargarProcesosJson = crearBoton("Cargar Procesos JSON", COLOR_VERDE);
         btnMetricas = crearBoton("Metricas", COLOR_MORADO);
         btnGraficoCpu = crearBoton("Grafico CPU", COLOR_PRIMARIO);
+        btnGraficoDisco = crearBoton("Grafico Disco", COLOR_AMBAR);
         btnGuardar = crearBoton("Exportar Escenario", COLOR_GRIS_BOTON);
         btnCargar = crearBoton("Importar CSV", COLOR_GRIS_BOTON);
 
@@ -304,6 +306,12 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             dlg.setVisible(true);
         });
 
+        btnGraficoDisco.addActionListener(e -> {
+            DialogoGraficoDisco dlg = new DialogoGraficoDisco(this, cluster);
+            dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+            dlg.setVisible(true);
+        });
+
         btnGuardar.addActionListener(e -> guardarEscenarioCsv());
         btnCargar.addActionListener(e -> cargarEscenarioCsv());
 
@@ -313,6 +321,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         panelAcciones.add(btnNuevoProceso);
         panelAcciones.add(btnMetricas);
         panelAcciones.add(btnGraficoCpu);
+        panelAcciones.add(btnGraficoDisco);
         panelAcciones.add(btnGuardar);
         panelAcciones.add(btnCargar);
 
