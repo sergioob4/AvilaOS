@@ -144,6 +144,94 @@ public class SistemaArchivos {
         }
     }
 
+    /** Limpia todos los elementos del árbol y las escrituras pendientes (al cargar JSON 1). */
+    public void reiniciar() {
+        adquirir();
+        try {
+            while (raiz.getCantidadHijos() > 0) {
+                raiz.quitarHijo(raiz.getHijo(0));
+            }
+            escrituras.vaciar();
+        } finally {
+            liberar();
+        }
+    }
+
+    /** Carga un directorio desde JSON creando los directorios padres intermedios si aún no existen. */
+    public void cargarDirectorioDesdeJson(String rutaAbsoluta, String dueno, Permiso permiso) {
+        if (rutaAbsoluta == null || !rutaAbsoluta.startsWith(NodoSistemaArchivos.SEPARADOR)) {
+            throw new IllegalArgumentException("La ruta debe comenzar con '/': " + rutaAbsoluta);
+        }
+        if (rutaAbsoluta.equals(NodoSistemaArchivos.SEPARADOR)) {
+            return;
+        }
+        adquirir();
+        try {
+            int sep = rutaAbsoluta.lastIndexOf('/');
+            String rutaPadre = sep == 0 ? "/" : rutaAbsoluta.substring(0, sep);
+            String nombre = rutaAbsoluta.substring(sep + 1);
+            Directorio padre = asegurarDirectorio(rutaPadre);
+            NodoSistemaArchivos existente = padre.buscarHijo(nombre);
+            if (existente != null) {
+                if (!(existente instanceof Directorio)) {
+                    throw new IllegalStateException("Ya existe un archivo en la ruta " + rutaAbsoluta);
+                }
+                return;
+            }
+            padre.agregarHijo(new Directorio(nombre, dueno, permiso));
+        } finally {
+            liberar();
+        }
+    }
+
+    /** Carga un archivo desde JSON exactamente en {@code startBlock} con {@code tamanoBloques} bloques. */
+    public void cargarArchivoDesdeJson(String rutaAbsoluta, String dueno, Permiso permiso,
+                                       int startBlock, int tamanoBloques) {
+        if (rutaAbsoluta == null || !rutaAbsoluta.startsWith(NodoSistemaArchivos.SEPARADOR)
+                || rutaAbsoluta.equals(NodoSistemaArchivos.SEPARADOR)) {
+            throw new IllegalArgumentException("Ruta de archivo inválida: " + rutaAbsoluta);
+        }
+        adquirir();
+        try {
+            int sep = rutaAbsoluta.lastIndexOf('/');
+            String rutaPadre = sep == 0 ? "/" : rutaAbsoluta.substring(0, sep);
+            String nombre = rutaAbsoluta.substring(sep + 1);
+            Directorio padre = asegurarDirectorio(rutaPadre);
+            Archivo archivo = new Archivo(nombre, dueno, permiso, tamanoBloques, null);
+            padre.agregarHijo(archivo);
+            try {
+                archivo.setPrimerBloque(disco.asignarArchivoEn(archivo.getRuta(), startBlock, tamanoBloques));
+            } catch (RuntimeException fallo) {
+                padre.quitarHijo(archivo);
+                throw fallo;
+            }
+        } finally {
+            liberar();
+        }
+    }
+
+    private Directorio asegurarDirectorio(String ruta) {
+        if (ruta == null || ruta.equals(NodoSistemaArchivos.SEPARADOR)) {
+            return raiz;
+        }
+        Directorio actual = raiz;
+        String[] partes = ruta.split(NodoSistemaArchivos.SEPARADOR);
+        for (String parte : partes) {
+            if (parte.isEmpty()) continue;
+            NodoSistemaArchivos hijo = actual.buscarHijo(parte);
+            if (hijo == null) {
+                Directorio nuevo = new Directorio(parte, ADMINISTRADOR, Permiso.PUBLICO);
+                actual.agregarHijo(nuevo);
+                actual = nuevo;
+            } else if (hijo instanceof Directorio dir) {
+                actual = dir;
+            } else {
+                throw new IllegalArgumentException("El componente '" + parte + "' de " + ruta + " no es un directorio.");
+            }
+        }
+        return actual;
+    }
+
     /** Registra un archivo y reserva su cadena de bloques en el disco asociado al árbol. */
     public Archivo crearArchivo(String rutaPadre, String nombre, String dueno, Permiso permiso,
                                 int tamanoBloques, String procesoCreador, String usuario, ModoUsuario modo) {

@@ -882,6 +882,25 @@ public class SistemaOperativo {
         this.quantum = Math.max(1, quantum);
     }
 
+    /**
+     * Reinicia CPU, todas las colas de procesos, uso de RAM y contadores del SO,
+     * preservando el estado del sistema de archivos en el disco (usado al cargar un nuevo JSON 2).
+     */
+    public synchronized void reiniciarProcesos() {
+        cpu.desalojarProceso();
+        colaNuevos.vaciar();
+        colaListos.vaciar();
+        colaBloqueados.vaciar();
+        colaListosSuspendidos.vaciar();
+        colaBloqueadosSuspendidos.vaciar();
+        colaTerminados.vaciar();
+        memoria.reiniciarUso();
+        procesosCompletadosExitosos = 0;
+        procesosTerminadosPorDeadline = 0;
+        totalSuspensiones = 0;
+        totalReactivaciones = 0;
+    }
+
     public ListaEnlazada<Proceso> getColaNuevos() {
         return colaNuevos;
     }
