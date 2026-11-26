@@ -67,31 +67,44 @@ public final class DiscoSimulado implements IComponenteReloj {
      * (usado al cargar el estado inicial del sistema de archivos desde JSON).
      */
     public int asignarArchivoEn(String ruta, int startBlock, int cantidad) {
-        if (ruta == null || ruta.isBlank() || cantidad < 1) {
-            throw new IllegalArgumentException("Indique ruta y cantidad positiva de bloques.");
+        if (cantidad < 1 || startBlock < 0 || startBlock > getBloquesDatosTotales() - cantidad) {
+            throw new IllegalArgumentException("Rango de bloques inválido.");
         }
+        int[] cadena = new int[cantidad];
+        for (int i = 0; i < cantidad; i++) cadena[i] = startBlock + i;
+        return asignarArchivoEn(ruta, cadena);
+    }
+
+    /** Restaura los enlaces de un archivo en el orden guardado. */
+    public int asignarArchivoEn(String ruta, int[] cadena) {
+        if (ruta == null || ruta.isBlank() || cadena == null || cadena.length == 0) {
+            throw new IllegalArgumentException("Indique la ruta y la cadena de bloques.");
+        }
+        int[] direcciones = cadena.clone();
         mutex.acquireUninterruptibly();
         try {
             int limiteDatos = bloques.length - config.swap();
-            if (startBlock < 0 || startBlock + cantidad > limiteDatos) {
-                throw new IllegalArgumentException("Rango de bloques [" + startBlock + ".."
-                        + (startBlock + cantidad - 1) + "] fuera del área de datos (0.." + (limiteDatos - 1) + ").");
-            }
             for (Bloque b : bloques) {
                 if (!b.swap() && ruta.equals(b.ocupante())) {
                     throw new IllegalStateException("Ya existen bloques asignados para " + ruta);
                 }
             }
-            for (int i = startBlock; i < startBlock + cantidad; i++) {
-                if (bloques[i].ocupante() != null) {
-                    throw new IllegalStateException("El bloque " + i + " ya está ocupado por " + bloques[i].ocupante());
+            boolean[] visitados = new boolean[limiteDatos];
+            for (int bloque : direcciones) {
+                if (bloque < 0 || bloque >= limiteDatos || visitados[bloque]) {
+                    throw new IllegalArgumentException("Bloque fuera del área de datos o repetido: " + bloque);
                 }
+                if (bloques[bloque].ocupante() != null) {
+                    throw new IllegalStateException("El bloque " + bloque + " ya está ocupado por " + bloques[bloque].ocupante());
+                }
+                visitados[bloque] = true;
             }
-            for (int i = startBlock; i < startBlock + cantidad; i++) {
-                int siguiente = (i + 1 < startBlock + cantidad) ? (i + 1) : -1;
-                bloques[i] = new Bloque(i, false, ruta, siguiente);
+            for (int i = 0; i < direcciones.length; i++) {
+                int bloque = direcciones[i];
+                int siguiente = i + 1 < direcciones.length ? direcciones[i + 1] : -1;
+                bloques[bloque] = new Bloque(bloque, false, ruta, siguiente);
             }
-            return startBlock;
+            return direcciones[0];
         } finally {
             mutex.release();
         }
