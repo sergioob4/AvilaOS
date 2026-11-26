@@ -966,6 +966,9 @@ public class GestorPersistencia {
         ValidadorJson.validarObjeto(json);
 
         String diskConfigStr = ValidadorJson.miembro(json, "diskConfig");
+        if (diskConfigStr == null && ValidadorJson.miembro(json, "processes") != null) {
+            throw new IOException("Este archivo contiene procesos. Ábralo con el botón «Cargar Procesos JSON».");
+        }
         if (diskConfigStr == null || !diskConfigStr.startsWith("{")) {
             throw new IOException("Falta el objeto obligatorio 'diskConfig' en el JSON del sistema de archivos.");
         }
@@ -1045,6 +1048,9 @@ public class GestorPersistencia {
         ValidadorJson.validarObjeto(json);
 
         String globalStr = ValidadorJson.miembro(json, "globalConfig");
+        if (globalStr == null && ValidadorJson.miembro(json, "fileSystem") != null) {
+            throw new IOException("Este archivo contiene el sistema de archivos. Ábralo con el botón «Cargar FS JSON».");
+        }
         if (globalStr == null || !globalStr.startsWith("{")) {
             throw new IOException("Falta el objeto obligatorio 'globalConfig' en el JSON de procesos.");
         }
