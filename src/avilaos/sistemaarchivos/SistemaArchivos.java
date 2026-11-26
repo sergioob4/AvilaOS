@@ -110,7 +110,7 @@ public class SistemaArchivos {
             if (inicio == Archivo.SIN_BLOQUES) {
                 throw new IllegalStateException("El archivo todavía no tiene bloques asignados.");
             }
-            return disco.iniciarTransferencia(inicio, DiscoSimulado.Operacion.LECTURA);
+            return disco.iniciarTransferencia(inicio, DiscoSimulado.Operacion.LECTURA, OperacionArchivo.LEER.toString());
         } finally {
             liberar();
         }
@@ -430,7 +430,7 @@ public class SistemaArchivos {
                 }
                 // Conservar el padre por identidad hasta que el disco confirme la escritura.
                 nuevo.setPadre(padre);
-                SolicitudDisco solicitud = disco.escribirDirectorio(nuevo.getRuta());
+                SolicitudDisco solicitud = disco.escribirDirectorio(nuevo.getRuta(), peticion.operacion().toString());
                 escrituras.agregar(new Escritura(solicitud.id(), peticion, nuevo));
                 return solicitud;
             }
@@ -443,7 +443,7 @@ public class SistemaArchivos {
                 NodoSistemaArchivos destino = nodoExistente(peticion.ruta());
                 if (destino == raiz) throw new IllegalArgumentException("La raíz no puede modificarse.");
                 if (destino instanceof Directorio directorio) {
-                    SolicitudDisco solicitud = disco.escribirDirectorio(directorio.getRuta());
+                    SolicitudDisco solicitud = disco.escribirDirectorio(directorio.getRuta(), peticion.operacion() + " directorio");
                     escrituras.agregar(new Escritura(solicitud.id(), peticion, directorio));
                     return solicitud;
                 }
@@ -451,7 +451,8 @@ public class SistemaArchivos {
             }
             SolicitudDisco solicitud;
             try {
-                solicitud = disco.iniciarTransferencia(archivo.getPrimerBloque(), DiscoSimulado.Operacion.ESCRITURA);
+                solicitud = disco.iniciarTransferencia(archivo.getPrimerBloque(), DiscoSimulado.Operacion.ESCRITURA,
+                        peticion.operacion().toString());
             } catch (RuntimeException fallo) {
                 if (crear) disco.liberar(archivo.getPrimerBloque());
                 throw fallo;
