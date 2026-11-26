@@ -56,6 +56,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
     private JLabel lblEstadoProcJson;
     private boolean fsJsonCargado = false;
     private boolean procesosJsonCargado = false;
+    private File archivoProcesosSeleccionado;
     private BotonEstilizado btnIniciar;
     private BotonEstilizado btnPausar;
     private BotonEstilizado btnAvanzarPaso;
@@ -221,26 +222,11 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             if (!validarCargaJsonObligatoria()) {
                 return;
             }
-            reloj.iniciar();
-            lblEstadoSimulacion.setText("  EN EJECUCIÓN  ");
-            lblEstadoSimulacion.setBackground(new Color(20, 83, 45));
-            lblEstadoSimulacion.setForeground(new Color(187, 247, 208));
-            lblEstadoSimulacion.setBorder(BorderFactory.createCompoundBorder(
-                    new LineBorder(new Color(34, 197, 94), 1, true),
-                    new EmptyBorder(4, 10, 4, 10)
-            ));
-            agregarLogEvento("Simulación INICIADA (ejecución automática en tiempo real).", COLOR_VERDE);
+            iniciarSimulacion();
         });
 
         btnPausar.addActionListener(e -> {
-            reloj.pausar();
-            lblEstadoSimulacion.setText("  PAUSADO  ");
-            lblEstadoSimulacion.setBackground(new Color(120, 53, 15));
-            lblEstadoSimulacion.setForeground(new Color(254, 240, 138));
-            lblEstadoSimulacion.setBorder(BorderFactory.createCompoundBorder(
-                    new LineBorder(new Color(245, 158, 11), 1, true),
-                    new EmptyBorder(4, 10, 4, 10)
-            ));
+            pausarReloj();
             agregarLogEvento("Simulación PAUSADA por el usuario.", COLOR_AMBAR);
         });
 
@@ -693,6 +679,29 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         return false;
     }
 
+    private void pausarReloj() {
+        reloj.pausar();
+        lblEstadoSimulacion.setText("  PAUSADO  ");
+        lblEstadoSimulacion.setBackground(new Color(120, 53, 15));
+        lblEstadoSimulacion.setForeground(new Color(254, 240, 138));
+        lblEstadoSimulacion.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(245, 158, 11), 1, true),
+                new EmptyBorder(4, 10, 4, 10)
+        ));
+    }
+
+    private void iniciarSimulacion() {
+        reloj.iniciar();
+        lblEstadoSimulacion.setText("  EN EJECUCIÓN  ");
+        lblEstadoSimulacion.setBackground(new Color(20, 83, 45));
+        lblEstadoSimulacion.setForeground(new Color(187, 247, 208));
+        lblEstadoSimulacion.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(34, 197, 94), 1, true),
+                new EmptyBorder(4, 10, 4, 10)
+        ));
+        agregarLogEvento("Simulación INICIADA (ejecución automática en tiempo real).", COLOR_VERDE);
+    }
+
     public boolean estaListaParaIniciar() {
         return fsJsonCargado && procesosJsonCargado;
     }
@@ -713,10 +722,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File file = chooser.getSelectedFile();
         try {
-            int cargados = cargarSistemaArchivosJsonDesdeArchivo(file);
-            JOptionPane.showMessageDialog(this,
-                    "Sistema de archivos cargado exitosamente (" + cargados + " elementos) desde:\n" + file.getName(),
-                    "Sistema de Archivos Cargado", JOptionPane.INFORMATION_MESSAGE);
+            cargarSistemaArchivosJsonDesdeArchivo(file);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
                     "Error al cargar JSON del sistema de archivos:\n" + ex.getMessage(),
@@ -726,7 +732,10 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
     public int cargarSistemaArchivosJsonDesdeArchivo(File file) throws Exception {
         exigirModoAdministrador();
-        reloj.pausar();
+        pausarReloj();
+        fsJsonCargado = false;
+        lblEstadoFsJson.setText("  FS JSON: Pendiente  ");
+        estilizarBadgeCarga(lblEstadoFsJson, false);
         Computador comp = cluster.getComputadores().obtener(0);
         int cargados = GestorPersistencia.importarSistemaArchivosJson(file, comp);
         fsJsonCargado = true;
@@ -734,6 +743,8 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         estilizarBadgeCarga(lblEstadoFsJson, true);
         actualizarTodo();
         agregarLogEvento("Sistema de archivos cargado desde " + file.getName() + " (" + cargados + " elementos).", COLOR_VERDE);
+        // La importación del disco vacía las colas. Restaurar la carga si se eligió primero.
+        if (archivoProcesosSeleccionado != null) cargarProcesosConfigJsonDesdeArchivo(archivoProcesosSeleccionado);
         return cargados;
     }
 
@@ -764,10 +775,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File file = chooser.getSelectedFile();
         try {
-            int cargados = cargarProcesosConfigJsonDesdeArchivo(file);
-            JOptionPane.showMessageDialog(this,
-                    "Procesos y configuración cargados exitosamente (" + cargados + " procesos) desde:\n" + file.getName(),
-                    "Procesos Cargados", JOptionPane.INFORMATION_MESSAGE);
+            cargarProcesosConfigJsonDesdeArchivo(file);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
                     "Error al cargar JSON de procesos y configuración:\n" + ex.getMessage(),
@@ -777,8 +785,13 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
     public int cargarProcesosConfigJsonDesdeArchivo(File file) throws Exception {
         exigirModoAdministrador();
-        reloj.pausar();
+        pausarReloj();
+        archivoProcesosSeleccionado = null;
+        procesosJsonCargado = false;
+        lblEstadoProcJson.setText("  Procesos JSON: Pendiente  ");
+        estilizarBadgeCarga(lblEstadoProcJson, false);
         int cargados = GestorPersistencia.importarProcesosConfigJson(file, cluster);
+        archivoProcesosSeleccionado = file;
         procesosJsonCargado = true;
         lblEstadoProcJson.setText("  Procesos JSON: Cargado  ");
         estilizarBadgeCarga(lblEstadoProcJson, true);
@@ -789,6 +802,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         lblEstadoSimulacion.setText("  PAUSADO  ");
         actualizarTodo();
         agregarLogEvento("Procesos y configuración cargados desde " + file.getName() + " (" + cargados + " procesos).", COLOR_VERDE);
+        if (estaListaParaIniciar()) iniciarSimulacion();
         return cargados;
     }
 
