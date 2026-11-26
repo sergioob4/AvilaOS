@@ -112,13 +112,30 @@ public final class DiscoSimulado implements IComponenteReloj {
 
     /** Reconstruye por completo el disco con una nueva configuración (al cargar JSON 1). */
     public void reconfigurar(ConfiguracionDisco nuevaConfig) {
+        reconfigurar(nuevaConfig, bloquesVacios(nuevaConfig));
+    }
+
+    /** Instala el mapa de un disco preparado para la importación. */
+    public void restaurarDesde(DiscoSimulado preparado) {
+        reconfigurar(preparado.getConfiguracion(), preparado.vista().bloques());
+    }
+
+    private static Bloque[] bloquesVacios(ConfiguracionDisco nuevaConfig) {
         if (nuevaConfig == null) throw new IllegalArgumentException("Configuración de disco nula.");
+        Bloque[] nuevos = new Bloque[nuevaConfig.bloques()];
+        for (int i = 0; i < nuevos.length; i++) {
+            nuevos[i] = new Bloque(i, i >= nuevos.length - nuevaConfig.swap(), null, -1);
+        }
+        return nuevos;
+    }
+
+    private void reconfigurar(ConfiguracionDisco nuevaConfig, Bloque[] nuevos) {
         mutex.acquireUninterruptibly();
         try {
             archivarSerieActualSiTieneDatos();
             this.config = nuevaConfig;
             this.politica = nuevaConfig.politica();
-            this.bloques = new Bloque[nuevaConfig.bloques()];
+            this.bloques = nuevos;
             this.cabezal = nuevaConfig.cabezal();
             this.direccion = Direccion.ASCENDENTE;
             this.barridoAscendente = true;
@@ -131,9 +148,6 @@ public final class DiscoSimulado implements IComponenteReloj {
             this.sumaEsperaCola = 0;
             this.solicitudesAtendidasTotal = 0;
             this.historialDesplazamiento.vaciar();
-            for (int i = 0; i < bloques.length; i++) {
-                bloques[i] = new Bloque(i, i >= bloques.length - nuevaConfig.swap(), null, -1);
-            }
         } finally {
             mutex.release();
         }
