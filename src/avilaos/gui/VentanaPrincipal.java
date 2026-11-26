@@ -2,6 +2,7 @@ package avilaos.gui;
 
 import avilaos.persistencia.GestorPersistencia;
 
+import avilaos.enums.ModoUsuario;
 import avilaos.enums.MotivoBloqueo;
 import avilaos.enums.PoliticaPlanificacion;
 import avilaos.enums.TipoProceso;
@@ -36,6 +37,12 @@ import java.util.Date;
  */
 public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
+    private final JComboBox<ModoUsuario> modo = new JComboBox<>(ModoUsuario.values());
+    private final JTextField identidadUsuario = new JTextField("user1", 10);
+    private final JLabel avisoModo = new JLabel();
+    private JSplitPane splitVertical;
+    private JScrollPane scrollComputadores;
+    private int posicionDivisor;
     private PanelDisco panelDisco;
     private PanelSistemaArchivos panelSistemaArchivos;
     private PanelOperacionesArchivo panelArchivos;
@@ -111,6 +118,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
         configurarVentana();
         inicializarUI();
+        aplicarModo();
 
         // Registrar la GUI como suscriptor del reloj para recibir pulsos síncronos
         reloj.registrarComponente(this);
@@ -333,12 +341,28 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         panelTop.add(fila1);
         panelTop.add(Box.createVerticalStrut(8));
         panelTop.add(fila2);
+        JPanel sesion = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 2));
+        sesion.setOpaque(false);
+        JLabel etiquetaModo = new JLabel("Modo activo");
+        etiquetaModo.setForeground(COLOR_TEXTO_TITULO);
+        etiquetaModo.setLabelFor(modo);
+        sesion.add(etiquetaModo);
+        sesion.add(modo);
+        JLabel etiquetaIdentidad = new JLabel("Usuario simulado");
+        etiquetaIdentidad.setForeground(COLOR_TEXTO_TITULO);
+        etiquetaIdentidad.setLabelFor(identidadUsuario);
+        sesion.add(etiquetaIdentidad);
+        sesion.add(identidadUsuario);
+        avisoModo.setForeground(COLOR_TEXTO_MUTED);
+        sesion.add(avisoModo);
+        panelTop.add(sesion);
+        modo.addActionListener(e -> aplicarModo());
         add(panelTop, BorderLayout.NORTH);
 
         // ---------------------------------------------------------------------
         // 2. Panel Central con Split: Computadores (arriba) y Logs (abajo)
         // ---------------------------------------------------------------------
-        JSplitPane splitVertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        splitVertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
         splitVertical.setBackground(COLOR_BG_VENTANA);
         splitVertical.setBorder(null);
         splitVertical.setDividerSize(6);
@@ -361,7 +385,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             panelComputadores.add(panelComp);
         }
 
-        JScrollPane scrollComputadores = new JScrollPane(panelComputadores);
+        scrollComputadores = new JScrollPane(panelComputadores);
         scrollComputadores.setBorder(null);
         scrollComputadores.setBackground(COLOR_BG_VENTANA);
         scrollComputadores.getViewport().setBackground(COLOR_BG_VENTANA);
@@ -452,7 +476,8 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         tabbedLogs.insertTab("Sistema de archivos", null, panelSistemaArchivos, null, 1);
         if (cluster.getCantidadComputadores() == 1) {
             SistemaOperativo so = primerComp.getSo();
-            panelArchivos = new PanelOperacionesArchivo(peticion -> {
+            panelArchivos = new PanelOperacionesArchivo(this::modoActivo, this::usuarioActivo, peticion -> {
+                primerComp.getSistemaArchivos().validarPermiso(peticion);
                 Proceso creado = so.crearProcesoArchivo(peticion, reloj.getCicloActual());
                 actualizarTodo();
                 return creado;
@@ -462,6 +487,57 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         tabbedLogs.setSelectedComponent(panelDisco);
         contenedor.add(tabbedLogs, BorderLayout.CENTER);
         return contenedor;
+    }
+
+    private ModoUsuario modoActivo() {
+        return (ModoUsuario) modo.getSelectedItem();
+    }
+
+    private void exigirModoAdministrador() {
+        if (!modoActivo().esAdministrador()) throw new SecurityException("Se requiere el modo Administrador.");
+    }
+
+    private String usuarioActivo() {
+        return modoActivo().esAdministrador() ? "admin" : identidadUsuario.getText().trim();
+    }
+
+    private void aplicarModo() {
+        boolean admin = modoActivo().esAdministrador();
+        if (!admin && (usuarioActivo().isBlank() || usuarioActivo().equalsIgnoreCase("admin"))) {
+            modo.setSelectedItem(ModoUsuario.ADMINISTRADOR);
+            avisoModo.setText("Indique un usuario distinto de admin antes de cambiar de modo.");
+            return;
+        }
+        identidadUsuario.setEditable(admin);
+        identidadUsuario.setToolTipText("El administrador elige la identidad para el modo Usuario.");
+        String motivo = "Se requiere el modo Administrador.";
+        avisoModo.setText(admin ? "Acceso total · Identidad administrativa: admin"
+                : "Solo lectura propia o pública y creación en sus directorios. Los controles del sistema requieren Administrador.");
+        for (JComponent control : new JComponent[]{btnNuevoProceso, btnCargarFsJson, btnGuardarFsJson,
+                btnCargarProcesosJson, btnMetricas, btnGraficoCpu, btnGraficoDisco, btnGuardar, btnCargar,
+                btnIniciar, btnPausar, btnAvanzarPaso, sliderVelocidad}) {
+            control.setEnabled(admin);
+            control.setToolTipText(admin ? null : motivo);
+        }
+        if (!admin) {
+            for (Window ventana : getOwnedWindows()) {
+                if (ventana instanceof DialogoGraficoCPU || ventana instanceof DialogoGraficoDisco) ventana.dispose();
+            }
+            posicionDivisor = splitVertical.getDividerLocation();
+            splitVertical.setTopComponent(null);
+            tabbedLogs.setSelectedComponent(panelSistemaArchivos);
+        } else if (splitVertical.getTopComponent() == null) {
+            splitVertical.setTopComponent(scrollComputadores);
+            splitVertical.setDividerLocation(posicionDivisor);
+        }
+        for (int i = 0; i < tabbedLogs.getTabCount(); i++) {
+            Component panel = tabbedLogs.getComponentAt(i);
+            boolean visible = admin || panel == panelSistemaArchivos || panel == panelArchivos;
+            tabbedLogs.setEnabledAt(i, visible);
+            tabbedLogs.setToolTipTextAt(i, visible ? null : motivo);
+        }
+        panelSistemaArchivos.mostrarAsignacion(admin);
+        if (panelArchivos != null) panelArchivos.cambiarSesion();
     }
 
     private JTextPane crearTextPaneLog() {
@@ -621,6 +697,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
     }
 
     public int cargarSistemaArchivosJsonDesdeArchivo(File file) throws Exception {
+        exigirModoAdministrador();
         reloj.pausar();
         Computador comp = cluster.getComputadores().obtener(0);
         int cargados = GestorPersistencia.importarSistemaArchivosJson(file, comp);
@@ -671,6 +748,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
     }
 
     public int cargarProcesosConfigJsonDesdeArchivo(File file) throws Exception {
+        exigirModoAdministrador();
         reloj.pausar();
         int cargados = GestorPersistencia.importarProcesosConfigJson(file, cluster);
         procesosJsonCargado = true;
@@ -747,6 +825,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      * la visualización del procesador, PC, prioridad y deadlines.
      */
     public void inyectarCargaPrueba() {
+        exigirModoAdministrador();
         if (cluster.getCantidadComputadores() == 1) {
             boolean cargado = avilaos.sistema.EscenarioDisco.cargar(cluster.getComputadores().obtener(0));
             agregarLogEvento(cargado ? "Ejemplo de disco cargado. Avance el reloj para observar la lectura."

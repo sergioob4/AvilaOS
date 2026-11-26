@@ -52,6 +52,8 @@ final class PanelSistemaArchivos extends JPanel {
 
     private final ModeloArbolArchivos modeloArbol;
     private final JTree arbol;
+    private final JSplitPane split;
+    private final JPanel asignacion;
 
     private final ModeloTablaAsignacion modeloTabla;
     private final JTable tablaAsignacion;
@@ -88,7 +90,8 @@ final class PanelSistemaArchivos extends JPanel {
         this.lblResumenTabla.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         this.lblResumenTabla.setForeground(COLOR_MUTED);
 
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, crearPanelIzquierdo(), crearPanelDerecho());
+        asignacion = crearPanelDerecho();
+        split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, crearPanelIzquierdo(), asignacion);
         split.setBackground(COLOR_BG);
         split.setBorder(null);
         split.setDividerSize(6);
@@ -99,6 +102,13 @@ final class PanelSistemaArchivos extends JPanel {
         actualizar();
         expandirTodo(new TreePath(modeloArbol.getRoot()));
         arbol.setSelectionRow(0);
+    }
+
+    void mostrarAsignacion(boolean administrador) {
+        split.setRightComponent(administrador ? asignacion : null);
+        lblDetPrimerBloque.getParent().setVisible(administrador);
+        lblDetCreador.getParent().setVisible(administrador);
+        if (administrador) split.setDividerLocation(0.38);
     }
 
     private JTree crearArbol(ModeloArbolArchivos modelo) {
