@@ -349,7 +349,7 @@ public class SistemaArchivos {
                 }
                 case CREAR -> validarCreacion(padreDe(peticion.ruta()), peticion.usuario(),
                         peticion.usuario(), peticion.modo());
-                case ACTUALIZAR, ELIMINAR -> exigirAdministrador(peticion.modo());
+                case CREAR_DIRECTORIO, ACTUALIZAR, ELIMINAR -> exigirAdministrador(peticion.modo());
             }
         } finally {
             liberar();
@@ -382,6 +382,21 @@ public class SistemaArchivos {
         }
         adquirir();
         try {
+            if (peticion.operacion() == OperacionArchivo.CREAR_DIRECTORIO) {
+                exigirAdministrador(peticion.modo());
+                String ruta = peticion.ruta();
+                Directorio padre = padreDe(ruta);
+                Directorio nuevo = new Directorio(ruta.substring(ruta.lastIndexOf('/') + 1),
+                        peticion.usuario(), peticion.permiso());
+                if (padre.buscarHijo(nuevo.getNombre()) != null) {
+                    throw new IllegalStateException("Ya existe un elemento en " + ruta);
+                }
+                // Conservar el padre por identidad hasta que el disco confirme la escritura.
+                nuevo.setPadre(padre);
+                SolicitudDisco solicitud = disco.escribirDirectorio(nuevo.getRuta());
+                escrituras.agregar(new Escritura(solicitud.id(), peticion, nuevo));
+                return solicitud;
+            }
             Archivo archivo;
             boolean crear = peticion.operacion() == OperacionArchivo.CREAR;
             if (crear) {
@@ -433,6 +448,11 @@ public class SistemaArchivos {
             if (escritura == null) return;
             NodoSistemaArchivos nodo = escritura.nodo();
             switch (escritura.peticion().operacion()) {
+                case CREAR_DIRECTORIO -> {
+                    Directorio padre = nodo.getPadre();
+                    if (!padre.estaDentroDe(raiz)) throw new IllegalStateException("El directorio padre fue eliminado.");
+                    padre.agregarHijo(nodo);
+                }
                 case CREAR -> {
                     Archivo archivo = (Archivo) nodo;
                     try {

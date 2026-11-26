@@ -342,13 +342,23 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         // ---------------------------------------------------------------------
         // 2. Panel Central con Split: Computadores (arriba) y Logs (abajo)
         // ---------------------------------------------------------------------
-        splitVertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        splitVertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT) {
+            private boolean ajustarAlAbrir = true;
+
+            @Override
+            public void doLayout() {
+                if (ajustarAlAbrir && getHeight() > getDividerSize()) {
+                    ajustarAlAbrir = false;
+                    setDividerLocation(0.60);
+                }
+                super.doLayout();
+            }
+        };
         splitVertical.setBackground(COLOR_BG_VENTANA);
         splitVertical.setBorder(null);
         splitVertical.setDividerSize(6);
         splitVertical.setResizeWeight(0.65);
         splitVertical.setContinuousLayout(true);
-        splitVertical.setDividerLocation(560);
 
         // 2.1 Contenedor de Computadores
         panelComputadores = new JPanel();

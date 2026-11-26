@@ -20,6 +20,11 @@ public record PeticionArchivo(OperacionArchivo operacion, String ruta, String us
             if (tamanoBloques < 1 || permiso == null) {
                 throw new IllegalArgumentException("Crear requiere un tamaño positivo y un permiso.");
             }
+        } else if (operacion == OperacionArchivo.CREAR_DIRECTORIO) {
+            if (tamanoBloques != 0 || permiso == null) {
+                throw new IllegalArgumentException("Un directorio requiere permiso y no ocupa bloques de datos.");
+            }
+            NodoSistemaArchivos.validarNombre(ruta.substring(ruta.lastIndexOf('/') + 1));
         } else if (tamanoBloques != 0 || permiso != null) {
             throw new IllegalArgumentException("Solo la creación admite tamaño y permiso.");
         }

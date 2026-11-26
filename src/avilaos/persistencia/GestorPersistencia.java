@@ -684,7 +684,7 @@ public class GestorPersistencia {
     }
 
     private static String jsonPeticion(PeticionArchivo p) {
-        return "{\"operacion\":\"" + p.operacion() + "\",\"ruta\":\"" + escaparJson(p.ruta())
+        return "{\"operacion\":\"" + p.operacion().name() + "\",\"ruta\":\"" + escaparJson(p.ruta())
                 + "\",\"usuario\":\"" + escaparJson(p.usuario()) + "\",\"modo\":\"" + p.modo().name()
                 + "\",\"tamanoBloques\":" + p.tamanoBloques()
                 + (p.permiso() == null ? "" : ",\"permiso\":\"" + p.permiso().name() + "\"")
@@ -1094,8 +1094,9 @@ public class GestorPersistencia {
             int bloquesCrear = 0;
             Permiso permisoCrear = null;
             String nuevoNombre = null;
-            if (op == OperacionArchivo.CREAR) {
-                bloquesCrear = leerEnteroOpcional(obj, "blocks", 1, 1, 500);
+            if (op == OperacionArchivo.CREAR || op == OperacionArchivo.CREAR_DIRECTORIO) {
+                bloquesCrear = op == OperacionArchivo.CREAR ? leerEnteroOpcional(obj, "blocks", 1, 1, 500)
+                        : leerEnteroOpcional(obj, "blocks", 0, 0, 0);
                 String permStr = extraerValorJson(obj, "permissions");
                 permisoCrear = permStr.isBlank() ? Permiso.PUBLICO : parsearPermisoJson(permStr);
             } else if (op == OperacionArchivo.ACTUALIZAR) {
@@ -1188,6 +1189,7 @@ public class GestorPersistencia {
 
     private static OperacionArchivo parsearOperacionJson(String texto) throws IOException {
         return switch (texto.trim().toUpperCase()) {
+            case "CREATE_DIRECTORY", "CREAR_DIRECTORIO" -> OperacionArchivo.CREAR_DIRECTORIO;
             case "READ", "LEER" -> OperacionArchivo.LEER;
             case "CREATE", "CREAR" -> OperacionArchivo.CREAR;
             case "UPDATE", "ACTUALIZAR" -> OperacionArchivo.ACTUALIZAR;
