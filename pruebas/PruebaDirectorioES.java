@@ -30,6 +30,8 @@ class PruebaDirectorioES {
                 exigir(fs.buscar("/informes") == null, "El árbol se modificó antes de completar la E/S");
                 for (var solicitud : comp.getDisco().vista().pendientes()) {
                     if (solicitud.id() == proceso.getPcb().getIdSolicitudDisco() && solicitud.metadatos()) {
+                        exigir(solicitud.toString().contains("Crear directorio /informes"),
+                                "La cola debe mostrar la operación solicitada y su ruta");
                         pasoPorDisco = true;
                     }
                 }

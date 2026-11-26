@@ -265,7 +265,7 @@ public final class DiscoSimulado implements IComponenteReloj {
             ocupante = bloques[solicitud.inicio()].ocupante();
         }
         if (solicitud.ocupante().equals(ocupante)) return solicitud;
-        return new SolicitudDisco(solicitud.id(), solicitud.inicio(), solicitud.operacion(), ocupante, solicitud.metadatos());
+        return new SolicitudDisco(solicitud.id(), solicitud.inicio(), solicitud.operacion(), ocupante, solicitud.metadatos(), solicitud.accion());
     }
 
     private int asignar(String ocupante, int cantidad, boolean swap) {
@@ -345,9 +345,13 @@ public final class DiscoSimulado implements IComponenteReloj {
 
     /** El directorio carece de cadena: se simula un acceso de metadatos en la posición actual. */
     public SolicitudDisco escribirDirectorio(String ruta) {
+        return escribirDirectorio(ruta, Operacion.ESCRITURA.toString());
+    }
+
+    public SolicitudDisco escribirDirectorio(String ruta, String accion) {
         mutex.acquireUninterruptibly();
         try {
-            var solicitud = new SolicitudDisco(siguienteId++, cabezal, Operacion.ESCRITURA, ruta, true);
+            var solicitud = new SolicitudDisco(siguienteId++, cabezal, Operacion.ESCRITURA, ruta, true, accion);
             cola.agregar(solicitud);
             ciclosLlegada.agregar(cicloActual);
             return solicitud;
@@ -357,11 +361,16 @@ public final class DiscoSimulado implements IComponenteReloj {
     }
 
     public SolicitudDisco iniciarTransferencia(int inicio, Operacion tipo) {
+        if (tipo == null) throw new IllegalArgumentException("Indique una operación.");
+        return iniciarTransferencia(inicio, tipo, tipo.toString());
+    }
+
+    public SolicitudDisco iniciarTransferencia(int inicio, Operacion tipo, String accion) {
         mutex.acquireUninterruptibly();
         try {
             validarInicio(inicio);
             if (tipo == null) throw new IllegalArgumentException("Indique una operación.");
-            SolicitudDisco solicitud = new SolicitudDisco(siguienteId++, inicio, tipo, bloques[inicio].ocupante());
+            SolicitudDisco solicitud = new SolicitudDisco(siguienteId++, inicio, tipo, bloques[inicio].ocupante(), false, accion);
             cola.agregar(solicitud);
             ciclosLlegada.agregar(cicloActual);
             return solicitud;

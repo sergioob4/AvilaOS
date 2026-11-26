@@ -4,6 +4,7 @@ import avilaos.hardware.DiscoSimulado;
 import avilaos.hardware.ConfiguracionDisco;
 import avilaos.enums.ModoUsuario;
 import avilaos.enums.Permiso;
+import avilaos.enums.TipoOperacionES;
 import avilaos.enums.PoliticaDisco;
 import avilaos.sistemaarchivos.SistemaArchivos;
 
@@ -63,7 +64,7 @@ public final class EscenarioDisco {
         archivos.solicitarLectura("/ejemplo.txt", admin, ModoUsuario.ADMINISTRADOR);
         if (swap > 0) {
             int proceso = disco.asignarSwap("P-demo", Math.min(3, swap));
-            disco.iniciarTransferencia(proceso, DiscoSimulado.Operacion.ESCRITURA);
+            disco.iniciarTransferencia(proceso, DiscoSimulado.Operacion.ESCRITURA, TipoOperacionES.SUSPENDER.getEtiqueta());
         }
         if (datos > cantidad) {
             archivos.crearArchivo("/", "notas.txt", admin, Permiso.PRIVADO, Math.min(3, datos - cantidad),

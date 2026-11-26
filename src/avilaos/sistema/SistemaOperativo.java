@@ -563,7 +563,8 @@ public class SistemaOperativo {
         try {
             PCB pcbVictima = victima.getPcb();
             int bloqueSwap = disco.asignarSwap(victima.getId(), pcbVictima.getMemoriaAsignada());
-            SolicitudDisco solicitud = disco.iniciarTransferencia(bloqueSwap, DiscoSimulado.Operacion.ESCRITURA);
+            SolicitudDisco solicitud = disco.iniciarTransferencia(bloqueSwap, DiscoSimulado.Operacion.ESCRITURA,
+                    TipoOperacionES.SUSPENDER.getEtiqueta());
             pcbVictima.setPrimerBloqueSwap(bloqueSwap);
             pcbVictima.setIdSolicitudSwap(solicitud.id());
             pcbVictima.setOperacionSwapEnCurso(TipoOperacionES.SUSPENDER);
@@ -609,7 +610,8 @@ public class SistemaOperativo {
             PCB pcb = elegido.getPcb();
             memoria.asignarMemoria(pcb.getMemoriaAsignada());
             try {
-                SolicitudDisco solicitud = disco.iniciarTransferencia(pcb.getPrimerBloqueSwap(), DiscoSimulado.Operacion.LECTURA);
+                SolicitudDisco solicitud = disco.iniciarTransferencia(pcb.getPrimerBloqueSwap(), DiscoSimulado.Operacion.LECTURA,
+                        TipoOperacionES.REACTIVAR.getEtiqueta());
                 pcb.setIdSolicitudSwap(solicitud.id());
                 pcb.setOperacionSwapEnCurso(TipoOperacionES.REACTIVAR);
                 registrarEvento("Planificador mediano plazo solicita reactivar a " + elegido.getId()
