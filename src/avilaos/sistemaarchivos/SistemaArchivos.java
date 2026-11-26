@@ -26,7 +26,7 @@ public class SistemaArchivos {
     /** Dueño de la raíz y de los archivos del sistema. */
     public static final String ADMINISTRADOR = "admin";
 
-    private final Directorio raiz;
+    private Directorio raiz;
     private final Semaphore mutex;
     private final DiscoSimulado disco;
     public record EstadoPersistente(Directorio raiz, DiscoSimulado.Vista disco) {}
@@ -152,13 +152,26 @@ public class SistemaArchivos {
         }
     }
 
-    /** Limpia todos los elementos del árbol y las escrituras pendientes (al cargar JSON 1). */
+    /** Limpia todos los elementos del árbol y las escrituras pendientes. */
     public void reiniciar() {
         adquirir();
         try {
             while (raiz.getCantidadHijos() > 0) {
                 raiz.quitarHijo(raiz.getHijo(0));
             }
+            escrituras.vaciar();
+        } finally {
+            liberar();
+        }
+    }
+
+    /** Instala el árbol y el disco de un sistema de archivos ya validado. */
+    public void restaurarDesde(SistemaArchivos preparado) {
+        Directorio nuevaRaiz = preparado.getRaiz();
+        adquirir();
+        try {
+            disco.restaurarDesde(preparado.disco);
+            raiz = nuevaRaiz;
             escrituras.vaciar();
         } finally {
             liberar();

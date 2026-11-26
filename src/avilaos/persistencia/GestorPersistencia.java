@@ -977,6 +977,38 @@ public class GestorPersistencia {
      */
     public static int importarSistemaArchivosJson(File archivo, Computador comp) throws IOException {
         if (comp == null) throw new IOException("Computador inválido.");
+        synchronized (comp) {
+            var carga = prepararSistemaArchivos(archivo, comp.getDisco().getConfiguracion());
+            aplicarSistemaArchivos(carga, comp);
+            return carga.elementos();
+        }
+    }
+
+    /** Si ya hay un JSON de procesos seleccionado, ambos archivos se validan antes de aplicar la carga. */
+    public static int importarSistemaArchivosJson(File archivo, File archivoProcesos,
+                                                 ClusterDistribuido cluster) throws IOException {
+        Computador comp = computadorParaImportar(cluster);
+        var procesos = archivoProcesos == null ? null : prepararProcesosConfig(archivoProcesos);
+        synchronized (cluster.getRelojGlobal()) {
+            synchronized (comp) {
+                var carga = prepararSistemaArchivos(archivo, comp.getDisco().getConfiguracion());
+                if (procesos != null) validarTamanoDisco(carga.bloquesDatos(), procesos);
+                aplicarSistemaArchivos(carga, comp);
+                if (procesos != null) aplicarProcesosConfig(procesos, cluster, comp);
+                return carga.elementos();
+            }
+        }
+    }
+
+    private record CargaSistemaArchivos(SistemaArchivos sistema, int bloquesDatos, int elementos) {}
+
+    private static void aplicarSistemaArchivos(CargaSistemaArchivos carga, Computador comp) {
+        comp.getSo().reiniciarProcesos();
+        comp.getSistemaArchivos().restaurarDesde(carga.sistema());
+    }
+
+    private static CargaSistemaArchivos prepararSistemaArchivos(File archivo, ConfiguracionDisco prevCfg)
+            throws IOException {
         String json = Files.readString(archivo.toPath(), StandardCharsets.UTF_8);
         ValidadorJson.validarObjeto(json);
 
@@ -1005,15 +1037,16 @@ public class GestorPersistencia {
         }
 
         // Conservar swap y política previos si ya existían, asegurando capacidad totalBlocks + swap
-        ConfiguracionDisco prevCfg = comp.getDisco().getConfiguracion();
         int swapActual = prevCfg.swap();
         int totalDisco = totalBlocks + swapActual;
         int velocidad = Math.min(prevCfg.velocidad(), totalDisco);
-        ConfiguracionDisco nuevaCfg = new ConfiguracionDisco(totalDisco, swapActual, initialHead, velocidad, prevCfg.politica());
-
-        comp.getSo().reiniciarProcesos();
-        comp.getDisco().reconfigurar(nuevaCfg);
-        comp.getSistemaArchivos().reiniciar();
+        ConfiguracionDisco nuevaCfg;
+        try {
+            nuevaCfg = new ConfiguracionDisco(totalDisco, swapActual, initialHead, velocidad, prevCfg.politica());
+        } catch (IllegalArgumentException ex) {
+            throw new IOException("Configuración del disco inválida: " + ex.getMessage(), ex);
+        }
+        SistemaArchivos preparado = new SistemaArchivos(new DiscoSimulado(nuevaCfg));
 
         // Primera pasada: directorios
         int cargados = 0;
@@ -1025,7 +1058,7 @@ public class GestorPersistencia {
                 String owner = leerTextoObligatorio(item, "owner");
                 Permiso perm = parsearPermisoJson(leerTextoObligatorio(item, "permissions"));
                 try {
-                    comp.getSistemaArchivos().cargarDirectorioDesdeJson(path, owner, perm);
+                    preparado.cargarDirectorioDesdeJson(path, owner, perm);
                     cargados++;
                 } catch (RuntimeException ex) {
                     throw new IOException("Error cargando directorio " + path + ": " + ex.getMessage(), ex);
@@ -1044,7 +1077,7 @@ public class GestorPersistencia {
                 String owner = leerTextoObligatorio(item, "owner");
                 Permiso perm = parsearPermisoJson(leerTextoObligatorio(item, "permissions"));
                 try {
-                    comp.getSistemaArchivos().cargarArchivoDesdeJson(path, owner, perm, cadenas[i]);
+                    preparado.cargarArchivoDesdeJson(path, owner, perm, cadenas[i]);
                     cargados++;
                 } catch (RuntimeException ex) {
                     throw new IOException("Error cargando archivo " + path + ": " + ex.getMessage(), ex);
@@ -1052,7 +1085,7 @@ public class GestorPersistencia {
             }
         }
 
-        return cargados;
+        return new CargaSistemaArchivos(preparado, totalBlocks, cargados);
     }
 
     private static int[] leerCadenaBloques(String item, int totalBlocks, boolean[] ocupados) throws IOException {
@@ -1099,9 +1132,32 @@ public class GestorPersistencia {
      * @return cantidad de procesos de E/S cargados y admitidos
      */
     public static int importarProcesosConfigJson(File archivo, ClusterDistribuido cluster) throws IOException {
+        Computador comp = computadorParaImportar(cluster);
+        var carga = prepararProcesosConfig(archivo);
+        synchronized (cluster.getRelojGlobal()) {
+            synchronized (comp) {
+                validarTamanoDisco(comp.getDisco().getBloquesDatosTotales(), carga);
+                aplicarProcesosConfig(carga, cluster, comp);
+            }
+        }
+        return carga.procesos().obtenerTamano();
+    }
+
+    private static Computador computadorParaImportar(ClusterDistribuido cluster) throws IOException {
         if (cluster == null || cluster.getCantidadComputadores() < 1) {
             throw new IOException("No hay computador disponible en el clúster.");
         }
+        return cluster.getComputadores().obtener(0);
+    }
+
+    private record ProcesoImportado(String nombre, int prioridad, int memoria, int deadline,
+                                    int instrucciones, PeticionArchivo peticion) {}
+
+    private record CargaProcesos(int duracionCiclo, int swap, PoliticaDisco politicaDisco, int ram,
+                                 PoliticaPlanificacion politicaCpu, int quantum,
+                                 ListaEnlazada<ProcesoImportado> procesos) {}
+
+    private static CargaProcesos prepararProcesosConfig(File archivo) throws IOException {
         String json = Files.readString(archivo.toPath(), StandardCharsets.UTF_8);
         ValidadorJson.validarObjeto(json);
 
@@ -1130,10 +1186,7 @@ public class GestorPersistencia {
         }
         ListaEnlazada<String> listaProcesos = ValidadorJson.objetos(procsStr);
 
-        Computador comp = cluster.getComputadores().obtener(0);
-
-        // Validar procesos antes de mutar el estado del computador
-        ListaEnlazada<Proceso> preparados = new ListaEnlazada<>();
+        ListaEnlazada<ProcesoImportado> preparados = new ListaEnlazada<>();
         for (int i = 0; i < listaProcesos.obtenerTamano(); i++) {
             String obj = listaProcesos.obtener(i);
             String name = leerTextoObligatorio(obj, "name");
@@ -1166,27 +1219,40 @@ public class GestorPersistencia {
                 nuevoNombre = nn;
             }
 
-            PeticionArchivo peticion = new PeticionArchivo(op, targetPath, owner,
-                    ModoUsuario.ADMINISTRADOR, bloquesCrear, permisoCrear, nuevoNombre);
-            preparados.agregar(new Proceso(name, comp.getId(), TipoProceso.IO_BOUND,
-                    prioridad, memory, deadline, instructions, peticion));
+            try {
+                PeticionArchivo peticion = new PeticionArchivo(op, targetPath, owner,
+                        ModoUsuario.ADMINISTRADOR, bloquesCrear, permisoCrear, nuevoNombre);
+                preparados.agregar(new ProcesoImportado(name, prioridad, memory, deadline, instructions, peticion));
+            } catch (IllegalArgumentException ex) {
+                throw new IOException("Proceso " + name + ": " + ex.getMessage(), ex);
+            }
         }
+        return new CargaProcesos(cycleDurationMs, swapSizeBlocks, politicaDisco, ramCapacity,
+                politicaCpu, quantum, preparados);
+    }
 
-        // Aplicar configuración preservando los archivos del disco
+    private static void validarTamanoDisco(int bloquesDatos, CargaProcesos carga) throws IOException {
+        if ((long) bloquesDatos + carga.swap() > 1000) {
+            throw new IOException("Los bloques de datos y de swap superan la capacidad máxima del disco.");
+        }
+    }
+
+    private static void aplicarProcesosConfig(CargaProcesos carga, ClusterDistribuido cluster, Computador comp) {
         cluster.getRelojGlobal().reiniciar();
-        cluster.getRelojGlobal().setDuracionCicloMs(cycleDurationMs);
+        cluster.getRelojGlobal().setDuracionCicloMs(carga.duracionCiclo());
         comp.getSo().reiniciarProcesos();
-        comp.getMemoria().reconfigurar(ramCapacity);
-        comp.getDisco().ajustarSwapYPolitica(swapSizeBlocks, politicaDisco);
-        comp.cambiarPolitica(politicaCpu);
-        if (quantum > 0) {
-            comp.cambiarQuantum(quantum);
+        comp.getMemoria().reconfigurar(carga.ram());
+        comp.getDisco().ajustarSwapYPolitica(carga.swap(), carga.politicaDisco());
+        comp.cambiarPolitica(carga.politicaCpu());
+        if (carga.quantum() > 0) {
+            comp.cambiarQuantum(carga.quantum());
         }
 
-        for (int i = 0; i < preparados.obtenerTamano(); i++) {
-            comp.admitirProceso(preparados.obtener(i), 0);
+        for (int i = 0; i < carga.procesos().obtenerTamano(); i++) {
+            ProcesoImportado p = carga.procesos().obtener(i);
+            comp.admitirProceso(new Proceso(p.nombre(), comp.getId(), TipoProceso.IO_BOUND, p.prioridad(),
+                    p.memoria(), p.deadline(), p.instrucciones(), p.peticion()), 0);
         }
-        return preparados.obtenerTamano();
     }
 
     private static String leerTextoObligatorio(String obj, String campo) throws IOException {

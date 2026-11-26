@@ -732,19 +732,16 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
     public int cargarSistemaArchivosJsonDesdeArchivo(File file) throws Exception {
         exigirModoAdministrador();
-        pausarReloj();
-        fsJsonCargado = false;
-        lblEstadoFsJson.setText("  FS JSON: Pendiente  ");
-        estilizarBadgeCarga(lblEstadoFsJson, false);
-        Computador comp = cluster.getComputadores().obtener(0);
-        int cargados = GestorPersistencia.importarSistemaArchivosJson(file, comp);
+        int cargados;
+        synchronized (reloj) {
+            cargados = GestorPersistencia.importarSistemaArchivosJson(file, archivoProcesosSeleccionado, cluster);
+            pausarReloj();
+        }
         fsJsonCargado = true;
         lblEstadoFsJson.setText("  FS JSON: Cargado  ");
         estilizarBadgeCarga(lblEstadoFsJson, true);
-        actualizarTodo();
         agregarLogEvento("Sistema de archivos cargado desde " + file.getName() + " (" + cargados + " elementos).", COLOR_VERDE);
-        // La importación del disco vacía las colas. Restaurar la carga si se eligió primero.
-        if (archivoProcesosSeleccionado != null) cargarProcesosConfigJsonDesdeArchivo(archivoProcesosSeleccionado);
+        actualizarCargaJson();
         return cargados;
     }
 
@@ -785,25 +782,27 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
 
     public int cargarProcesosConfigJsonDesdeArchivo(File file) throws Exception {
         exigirModoAdministrador();
-        pausarReloj();
-        archivoProcesosSeleccionado = null;
-        procesosJsonCargado = false;
-        lblEstadoProcJson.setText("  Procesos JSON: Pendiente  ");
-        estilizarBadgeCarga(lblEstadoProcJson, false);
-        int cargados = GestorPersistencia.importarProcesosConfigJson(file, cluster);
+        int cargados;
+        synchronized (reloj) {
+            cargados = GestorPersistencia.importarProcesosConfigJson(file, cluster);
+            pausarReloj();
+        }
         archivoProcesosSeleccionado = file;
         procesosJsonCargado = true;
         lblEstadoProcJson.setText("  Procesos JSON: Cargado  ");
         estilizarBadgeCarga(lblEstadoProcJson, true);
+        agregarLogEvento("Procesos y configuración cargados desde " + file.getName() + " (" + cargados + " procesos).", COLOR_VERDE);
+        actualizarCargaJson();
+        return cargados;
+    }
+
+    private void actualizarCargaJson() {
         int duracion = (int) Math.max(sliderVelocidad.getMinimum(),
                 Math.min(sliderVelocidad.getMaximum(), reloj.getDuracionCicloMs()));
         sliderVelocidad.setValue(duracion);
         lblValorVelocidad.setText(reloj.getDuracionCicloMs() + " ms");
-        lblEstadoSimulacion.setText("  PAUSADO  ");
         actualizarTodo();
-        agregarLogEvento("Procesos y configuración cargados desde " + file.getName() + " (" + cargados + " procesos).", COLOR_VERDE);
         if (estaListaParaIniciar()) iniciarSimulacion();
-        return cargados;
     }
 
     /**
