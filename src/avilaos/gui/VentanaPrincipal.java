@@ -25,6 +25,7 @@ import javax.swing.plaf.basic.BasicTabbedPaneUI;
 import javax.swing.text.*;
 import java.awt.*;
 import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -64,6 +65,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
     private BotonEstilizado btnMetricas;
     private BotonEstilizado btnGraficoCpu;
     private BotonEstilizado btnGraficoDisco;
+    private BotonEstilizado btnCompararDisco;
     private BotonEstilizado btnCargarFsJson;
     private BotonEstilizado btnGuardarFsJson;
     private BotonEstilizado btnCargarProcesosJson;
@@ -260,6 +262,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         btnMetricas = crearBoton("Metricas", COLOR_MORADO);
         btnGraficoCpu = crearBoton("Grafico CPU", COLOR_PRIMARIO);
         btnGraficoDisco = crearBoton("Grafico Disco", COLOR_AMBAR);
+        btnCompararDisco = crearBoton("Comparar políticas de disco", COLOR_AMBAR);
         btnGuardar = crearBoton("Exportar Escenario", COLOR_GRIS_BOTON);
         btnCargar = crearBoton("Importar CSV", COLOR_GRIS_BOTON);
 
@@ -288,6 +291,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
             dlg.setVisible(true);
         });
+        btnCompararDisco.addActionListener(e -> compararPlanificacionDisco());
 
         btnGuardar.addActionListener(e -> guardarEscenarioCsv());
         btnCargar.addActionListener(e -> cargarEscenarioCsv());
@@ -299,6 +303,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         panelAcciones.add(btnMetricas);
         panelAcciones.add(btnGraficoCpu);
         panelAcciones.add(btnGraficoDisco);
+        panelAcciones.add(btnCompararDisco);
         panelAcciones.add(btnGuardar);
         panelAcciones.add(btnCargar);
 
@@ -490,7 +495,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         avisoModo.setText(admin ? "Acceso total · Identidad administrativa: admin"
                 : "Solo lectura propia o pública y creación en sus directorios. Los controles del sistema requieren Administrador.");
         for (JComponent control : new JComponent[]{btnNuevoProceso, btnCargarFsJson, btnGuardarFsJson,
-                btnCargarProcesosJson, btnMetricas, btnGraficoCpu, btnGraficoDisco, btnGuardar, btnCargar,
+                btnCargarProcesosJson, btnMetricas, btnGraficoCpu, btnGraficoDisco, btnCompararDisco, btnGuardar, btnCargar,
                 btnIniciar, btnPausar, btnAvanzarPaso, sliderVelocidad}) {
             control.setEnabled(admin);
             control.setToolTipText(admin ? null : motivo);
@@ -727,6 +732,47 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             JOptionPane.showMessageDialog(this,
                     "Error al cargar JSON del sistema de archivos:\n" + ex.getMessage(),
                     "Error de Persistencia", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void compararPlanificacionDisco() {
+        exigirModoAdministrador();
+        JFileChooser selector = crearSelectorJson("Seleccionar JSON del sistema de archivos");
+        selector.setSelectedFile(new File(selector.getCurrentDirectory(), "sistema_archivos.json"));
+        if (selector.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        File archivoFs = selector.getSelectedFile();
+        selector.setDialogTitle("Seleccionar JSON de procesos");
+        selector.setSelectedFile(new File(selector.getCurrentDirectory(), "procesos_config.json"));
+        if (selector.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
+        try {
+            var resultados = GestorPersistencia.compararPlanificacionJson(archivoFs, selector.getSelectedFile());
+            Object[][] filas = new Object[resultados.length][4];
+            for (int i = 0; i < resultados.length; i++) {
+                var resultado = resultados[i];
+                var orden = new StringBuilder();
+                for (int bloque : resultado.orden()) {
+                    if (!orden.isEmpty()) orden.append(" → ");
+                    orden.append(bloque);
+                }
+                filas[i] = new Object[]{resultado.politica(), orden.toString(), resultado.desplazamiento(),
+                        String.format("%.2f", resultado.esperaPromedio())};
+            }
+            JTable tabla = new JTable(filas, new String[]{"Política", "Orden de atención",
+                    "Desplazamiento (bloques)", "Espera media (ciclos)"});
+            tabla.setDefaultEditor(Object.class, null);
+            tabla.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+            int[] anchos = {75, 300, 170, 150};
+            for (int i = 0; i < anchos.length; i++) {
+                tabla.getColumnModel().getColumn(i).setPreferredWidth(anchos[i]);
+            }
+            tabla.setPreferredScrollableViewportSize(new Dimension(695, tabla.getRowHeight() * filas.length));
+            JOptionPane.showMessageDialog(this, new Object[]{
+                    "Todas las solicitudes parten en cola. Cada acceso usa el primer bloque de su archivo.",
+                    new JScrollPane(tabla)
+            }, "Comparación de políticas de disco", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Error al comparar políticas", JOptionPane.ERROR_MESSAGE);
         }
     }
 

@@ -14,6 +14,7 @@ import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.BufferAcotado;
 import avilaos.sistema.ClusterDistribuido;
 import avilaos.sistema.Computador;
+import avilaos.sistema.EscenarioDisco;
 import avilaos.sistemaarchivos.Archivo;
 import avilaos.sistemaarchivos.Directorio;
 import avilaos.sistemaarchivos.NodoSistemaArchivos;
@@ -1055,6 +1056,38 @@ public class GestorPersistencia {
         return cargados;
     }
 
+    /** Reproduce la cola inicial del enunciado a partir de los bloques de destino de los dos JSON. */
+    public static EscenarioDisco.Resultado[] compararPlanificacionJson(File archivoFs, File archivoProcesos)
+            throws IOException {
+        var computador = new Computador("comparacion", "Comparación de disco", 1);
+        importarSistemaArchivosJson(archivoFs, computador);
+        String json = Files.readString(archivoProcesos.toPath(), StandardCharsets.UTF_8);
+        ValidadorJson.validarObjeto(json);
+        var procesos = leerListaProcesosConfigJson(json);
+        var accesos = new EscenarioDisco.Acceso[procesos.obtenerTamano()];
+        if (accesos.length == 0) {
+            throw new IOException("El JSON de procesos debe definir al menos una solicitud.");
+        }
+        var archivos = computador.getSistemaArchivos();
+        for (int i = 0; i < accesos.length; i++) {
+            String proceso = procesos.obtener(i);
+            String nombre = leerTextoObligatorio(proceso, "name");
+            String ruta = leerTextoObligatorio(proceso, "targetPath");
+            var operacion = switch (parsearOperacionJson(leerTextoObligatorio(proceso, "operation"))) {
+                case LEER -> DiscoSimulado.Operacion.LECTURA;
+                case ACTUALIZAR, ELIMINAR -> DiscoSimulado.Operacion.ESCRITURA;
+                default -> throw new IOException("El proceso " + nombre
+                        + " debe indicar lectura, actualización o eliminación de un archivo existente.");
+            };
+            if (!(archivos.buscar(ruta) instanceof Archivo archivo)) {
+                throw new IOException("No existe el archivo " + ruta + " para " + nombre + ".");
+            }
+            accesos[i] = new EscenarioDisco.Acceso(archivo.getPrimerBloque(), operacion);
+        }
+        var disco = computador.getDisco();
+        return EscenarioDisco.comparar(disco.getBloquesDatosTotales(), disco.getConfiguracion().cabezal(), accesos);
+    }
+
     private static int[] leerCadenaBloques(String item, int totalBlocks, boolean[] ocupados) throws IOException {
         String ruta = leerTextoObligatorio(item, "path");
         int inicio = leerEnteroObligatorio(item, "startBlock", 0, totalBlocks - 1);
@@ -1124,11 +1157,7 @@ public class GestorPersistencia {
         PoliticaPlanificacion politicaCpu = parsearPoliticaCpuJson(leerTextoObligatorio(compStr, "policy"));
         int quantum = leerEnteroObligatorio(compStr, "quantum", 0, 100);
 
-        String procsStr = ValidadorJson.miembro(json, "processes");
-        if (procsStr == null || !procsStr.startsWith("[")) {
-            throw new IOException("Falta el arreglo obligatorio 'processes' en el JSON de procesos.");
-        }
-        ListaEnlazada<String> listaProcesos = ValidadorJson.objetos(procsStr);
+        ListaEnlazada<String> listaProcesos = leerListaProcesosConfigJson(json);
 
         Computador comp = cluster.getComputadores().obtener(0);
 
@@ -1187,6 +1216,14 @@ public class GestorPersistencia {
             comp.admitirProceso(preparados.obtener(i), 0);
         }
         return preparados.obtenerTamano();
+    }
+
+    private static ListaEnlazada<String> leerListaProcesosConfigJson(String json) throws IOException {
+        String procesos = ValidadorJson.miembro(json, "processes");
+        if (procesos == null || !procesos.startsWith("[")) {
+            throw new IOException("Falta el arreglo obligatorio 'processes' en el JSON de procesos.");
+        }
+        return ValidadorJson.objetos(procesos);
     }
 
     private static String leerTextoObligatorio(String obj, String campo) throws IOException {

@@ -2,6 +2,10 @@ import avilaos.enums.PoliticaDisco;
 import avilaos.hardware.ConfiguracionDisco;
 import avilaos.hardware.DiscoSimulado;
 import avilaos.hardware.SolicitudDisco;
+import avilaos.persistencia.GestorPersistencia;
+import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
 
 import static avilaos.hardware.DiscoSimulado.Operacion.LECTURA;
 
@@ -36,7 +40,30 @@ class PruebaPlanificacionDisco {
         exigir(disco.vista().desplazamiento() == recorrido, "Recorrido incorrecto en " + politica);
     }
 
-    public static void main(String[] args) {
+    static void verificarEjemplosJson() throws IOException {
+        var resultados = GestorPersistencia.compararPlanificacionJson(
+                new File("ejemplos/sistema_archivos.json"), new File("ejemplos/procesos_config.json"));
+        exigir(resultados.length == 4, "Faltan políticas en la comparación");
+        for (var resultado : resultados) {
+            int[] esperado = switch (resultado.politica()) {
+                case FIFO -> new int[]{95,180,34,119,11,123,62,64};
+                case SSTF -> new int[]{62,64,34,11,95,119,123,180};
+                case SCAN -> new int[]{62,64,95,119,123,180,34,11};
+                case C_SCAN -> new int[]{62,64,95,119,123,180,11,34};
+            };
+            long recorrido = switch (resultado.politica()) {
+                case FIFO -> 644;
+                case SSTF -> 236;
+                case SCAN -> 337;
+                case C_SCAN -> 183;
+            };
+            exigir(Arrays.equals(esperado, resultado.orden()), "Orden incorrecto con JSON en " + resultado.politica());
+            exigir(resultado.desplazamiento() == recorrido, "Recorrido incorrecto con JSON en " + resultado.politica());
+            exigir(resultado.esperaPromedio() > 0, "Falta la espera media en " + resultado.politica());
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
         int[] anexo = {82,17,43,140,24,16,190};
         verificar(PoliticaDisco.FIFO, anexo, anexo, 518);
         verificar(PoliticaDisco.SSTF, anexo, new int[]{43,24,17,16,82,140,190}, 208);
@@ -64,6 +91,7 @@ class PruebaPlanificacionDisco {
         disco.ejecutarCiclo(5);
         disco.ejecutarCiclo(6);
         exigir(disco.vista().activa().inicio() == 84, "No se aplicó SSTF al siguiente despacho");
-        System.out.println("OK: cuatro políticas, dos cargas, llegada en curso y cambio de política.");
+        verificarEjemplosJson();
+        System.out.println("OK: cuatro políticas, casos del enunciado desde los JSON y cambio de política en curso.");
     }
 }

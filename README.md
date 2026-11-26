@@ -196,6 +196,18 @@ java -cp build/classes avilaos.Main --console
 
 ## Estándares de Git y Flujo de Trabajo
 
+### Comparar las políticas de disco del enunciado
+
+En modo administrador, abre **Comparar políticas de disco** y selecciona primero
+`ejemplos/sistema_archivos.json` y después `ejemplos/procesos_config.json` en el
+selector. La tabla muestra el orden de atención, el desplazamiento total y la
+espera media de FIFO, SSTF, SCAN y C-SCAN.
+
+La comparación usa el cabezal inicial del JSON del disco. Todas las solicitudes
+parten en cola, en el orden del JSON de procesos, y cada acceso usa el primer bloque
+de su archivo de destino. C-SCAN excluye el salto de retorno del desplazamiento.
+La comparación se ejecuta en discos separados de la simulación principal.
+
 ### Ejecución y carga de escenarios
 
 El botón **Iniciar / Reanudar** continúa la ejecución automática después de
