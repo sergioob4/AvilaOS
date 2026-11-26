@@ -904,14 +904,15 @@ public class GestorPersistencia {
      */
     public static void exportarSistemaArchivosJson(File archivo, Computador comp) throws IOException {
         if (comp == null) throw new IOException("Computador inválido.");
-        DiscoSimulado disco = comp.getDisco();
-        SistemaArchivos fs = comp.getSistemaArchivos();
-        DiscoSimulado.Vista vista = disco.vista();
-        int totalBlocks = disco.getBloquesDatosTotales();
+        var estado = comp.getSistemaArchivos().capturarEstadoPersistente();
+        DiscoSimulado.Vista vista = estado.disco();
+        DiscoSimulado.Bloque[] bloquesDisco = vista.bloques();
+        int totalBlocks = bloquesDisco.length;
+        while (totalBlocks > 0 && bloquesDisco[totalBlocks - 1].swap()) totalBlocks--;
         int initialHead = Math.min(vista.cabezal(), Math.max(0, totalBlocks - 1));
 
         ListaEnlazada<NodoSistemaArchivos> nodos = new ListaEnlazada<>();
-        recolectarPreorden(fs.getRaiz(), nodos);
+        recolectarPreorden(estado.raiz(), nodos);
 
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
@@ -929,6 +930,20 @@ public class GestorPersistencia {
                 sb.append("      \"type\": \"FILE\",\n");
                 sb.append("      \"startBlock\": ").append(arch.getPrimerBloque()).append(",\n");
                 sb.append("      \"blocks\": ").append(arch.getTamanoBloques()).append(",\n");
+                sb.append("      \"blockChain\": [");
+                int bloque = arch.getPrimerBloque();
+                for (int j = 0; j < arch.getTamanoBloques(); j++) {
+                    if (bloque < 0 || bloque >= totalBlocks || !arch.getRuta().equals(bloquesDisco[bloque].ocupante())) {
+                        throw new IOException("Cadena de bloques inconsistente para " + arch.getRuta() + ".");
+                    }
+                    if (j > 0) sb.append(", ");
+                    sb.append(bloque);
+                    bloque = bloquesDisco[bloque].siguiente();
+                }
+                if (bloque != -1) {
+                    throw new IOException("Cadena de bloques demasiado larga para " + arch.getRuta() + ".");
+                }
+                sb.append("],\n");
             } else {
                 sb.append("      \"type\": \"DIRECTORY\",\n");
             }
@@ -980,6 +995,14 @@ public class GestorPersistencia {
             throw new IOException("Falta el arreglo obligatorio 'fileSystem' en el JSON del sistema de archivos.");
         }
         ListaEnlazada<String> entradas = ValidadorJson.objetos(fsArrayStr);
+        int[][] cadenas = new int[entradas.obtenerTamano()][];
+        boolean[] ocupados = new boolean[totalBlocks];
+        for (int i = 0; i < cadenas.length; i++) {
+            String item = entradas.obtener(i);
+            if ("FILE".equalsIgnoreCase(leerTextoObligatorio(item, "type"))) {
+                cadenas[i] = leerCadenaBloques(item, totalBlocks, ocupados);
+            }
+        }
 
         // Conservar swap y política previos si ya existían, asegurando capacidad totalBlocks + swap
         ConfiguracionDisco prevCfg = comp.getDisco().getConfiguracion();
@@ -1020,10 +1043,8 @@ public class GestorPersistencia {
                 String path = leerTextoObligatorio(item, "path");
                 String owner = leerTextoObligatorio(item, "owner");
                 Permiso perm = parsearPermisoJson(leerTextoObligatorio(item, "permissions"));
-                int startBlock = leerEnteroObligatorio(item, "startBlock", 0, totalBlocks - 1);
-                int blocks = leerEnteroObligatorio(item, "blocks", 1, totalBlocks);
                 try {
-                    comp.getSistemaArchivos().cargarArchivoDesdeJson(path, owner, perm, startBlock, blocks);
+                    comp.getSistemaArchivos().cargarArchivoDesdeJson(path, owner, perm, cadenas[i]);
                     cargados++;
                 } catch (RuntimeException ex) {
                     throw new IOException("Error cargando archivo " + path + ": " + ex.getMessage(), ex);
@@ -1032,6 +1053,43 @@ public class GestorPersistencia {
         }
 
         return cargados;
+    }
+
+    private static int[] leerCadenaBloques(String item, int totalBlocks, boolean[] ocupados) throws IOException {
+        String ruta = leerTextoObligatorio(item, "path");
+        int inicio = leerEnteroObligatorio(item, "startBlock", 0, totalBlocks - 1);
+        int cantidad = leerEnteroObligatorio(item, "blocks", 1, totalBlocks);
+        String cadenaJson = ValidadorJson.miembro(item, "blockChain");
+        String[] direcciones = null;
+        if (cadenaJson != null) {
+            if (!cadenaJson.startsWith("[") || !cadenaJson.endsWith("]")) {
+                throw new IOException("blockChain debe ser un arreglo para " + ruta + ".");
+            }
+            direcciones = cadenaJson.substring(1, cadenaJson.length() - 1).split(",", -1);
+            if (direcciones.length != cantidad) {
+                throw new IOException("El tamaño de blockChain no coincide con blocks para " + ruta + ".");
+            }
+        }
+
+        int[] cadena = new int[cantidad];
+        for (int i = 0; i < cantidad; i++) {
+            int bloque;
+            try {
+                // Los JSON originales solo describen intervalos contiguos.
+                bloque = direcciones == null ? inicio + i : Integer.parseInt(direcciones[i].trim());
+            } catch (NumberFormatException ex) {
+                throw new IOException("blockChain debe contener direcciones enteras para " + ruta + ".", ex);
+            }
+            if (i == 0 && bloque != inicio) {
+                throw new IOException("El primer bloque de blockChain no coincide con startBlock para " + ruta + ".");
+            }
+            if (bloque < 0 || bloque >= totalBlocks || ocupados[bloque]) {
+                throw new IOException("Bloque fuera del área de datos o repetido para " + ruta + ": " + bloque);
+            }
+            ocupados[bloque] = true;
+            cadena[i] = bloque;
+        }
+        return cadena;
     }
 
     /**

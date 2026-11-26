@@ -29,6 +29,7 @@ public class SistemaArchivos {
     private final Directorio raiz;
     private final Semaphore mutex;
     private final DiscoSimulado disco;
+    public record EstadoPersistente(Directorio raiz, DiscoSimulado.Vista disco) {}
     private record Escritura(long id, PeticionArchivo peticion, NodoSistemaArchivos nodo) {}
     private final ListaEnlazada<Escritura> escrituras = new ListaEnlazada<>();
 
@@ -66,6 +67,16 @@ public class SistemaArchivos {
         adquirir();
         try {
             return raiz.copiar();
+        } finally {
+            liberar();
+        }
+    }
+
+    /** Captura el árbol y sus cadenas sin que una operación CRUD pueda intercalarse. */
+    public EstadoPersistente capturarEstadoPersistente() {
+        adquirir();
+        try {
+            return new EstadoPersistente(raiz.copiar(), disco.vista());
         } finally {
             liberar();
         }
@@ -184,6 +195,16 @@ public class SistemaArchivos {
     /** Carga un archivo desde JSON exactamente en {@code startBlock} con {@code tamanoBloques} bloques. */
     public void cargarArchivoDesdeJson(String rutaAbsoluta, String dueno, Permiso permiso,
                                        int startBlock, int tamanoBloques) {
+        cargarArchivoDesdeJson(rutaAbsoluta, dueno, permiso, startBlock, tamanoBloques, null);
+    }
+
+    /** Carga un archivo desde JSON conservando todas las direcciones de su cadena. */
+    public void cargarArchivoDesdeJson(String rutaAbsoluta, String dueno, Permiso permiso, int[] cadena) {
+        cargarArchivoDesdeJson(rutaAbsoluta, dueno, permiso, -1, cadena.length, cadena);
+    }
+
+    private void cargarArchivoDesdeJson(String rutaAbsoluta, String dueno, Permiso permiso,
+                                       int startBlock, int tamanoBloques, int[] cadena) {
         if (rutaAbsoluta == null || !rutaAbsoluta.startsWith(NodoSistemaArchivos.SEPARADOR)
                 || rutaAbsoluta.equals(NodoSistemaArchivos.SEPARADOR)) {
             throw new IllegalArgumentException("Ruta de archivo inválida: " + rutaAbsoluta);
@@ -197,7 +218,10 @@ public class SistemaArchivos {
             Archivo archivo = new Archivo(nombre, dueno, permiso, tamanoBloques, null);
             padre.agregarHijo(archivo);
             try {
-                archivo.setPrimerBloque(disco.asignarArchivoEn(archivo.getRuta(), startBlock, tamanoBloques));
+                int inicio = cadena == null
+                        ? disco.asignarArchivoEn(archivo.getRuta(), startBlock, tamanoBloques)
+                        : disco.asignarArchivoEn(archivo.getRuta(), cadena);
+                archivo.setPrimerBloque(inicio);
             } catch (RuntimeException fallo) {
                 padre.quitarHijo(archivo);
                 throw fallo;
