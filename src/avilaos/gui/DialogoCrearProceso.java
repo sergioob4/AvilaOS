@@ -18,8 +18,6 @@ import java.awt.*;
  */
 public class DialogoCrearProceso extends JDialog {
 
-    private static final String SIN_BUFFERS = "(No hay buffers creados)";
-
     private final ClusterDistribuido cluster;
     private final VentanaPrincipal ventanaPrincipal;
 
@@ -29,18 +27,11 @@ public class DialogoCrearProceso extends JDialog {
     private JSpinner spinMemoria;
     private JSpinner spinPrioridad;
     private JSpinner spinDeadline;
-    private JComboBox<String> comboComputador;
 
     // Campos condicionales para I/O Bound
     private JPanel panelOpcionesIO;
     private JSpinner spinCiclosEntreIO;
     private JSpinner spinDuracionIO;
-
-    // Campos condicionales para Productor / Consumidor (Sincronización - Requerimiento 4)
-    private JPanel panelOpcionesSinc;
-    private JComboBox<String> comboBuffer;
-    private JSpinner spinCiclosPorItem;
-    private JSpinner spinItemsRequeridos;
 
     // Colores Dark Theme
     private static final Color COLOR_BG = new Color(21, 25, 32);
@@ -79,7 +70,7 @@ public class DialogoCrearProceso extends JDialog {
         lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 17));
         lblTitulo.setForeground(COLOR_TITULO);
 
-        JLabel lblSub = new JLabel("Defina los parámetros del proceso y asígnelo al clúster");
+        JLabel lblSub = new JLabel("Defina los parámetros del proceso y asígnelo al computador");
         lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblSub.setForeground(COLOR_LABEL);
 
@@ -100,7 +91,7 @@ public class DialogoCrearProceso extends JDialog {
         panelForm.add(Box.createVerticalStrut(10));
 
         // 2. Tipo de Proceso
-        comboTipo = new JComboBox<>(TipoProceso.values());
+        comboTipo = new JComboBox<>(new TipoProceso[]{TipoProceso.CPU_BOUND, TipoProceso.IO_BOUND});
         estilizarCombo(comboTipo);
         panelForm.add(crearFilaCampo("Tipo de Proceso:", comboTipo));
         panelForm.add(Box.createVerticalStrut(10));
@@ -127,17 +118,6 @@ public class DialogoCrearProceso extends JDialog {
         spinDeadline = new JSpinner(new SpinnerNumberModel(25, 1, 5000, 5));
         estilizarSpinner(spinDeadline);
         panelForm.add(crearFilaCampo("Deadline / Tiempo Límite (Ciclos):", spinDeadline));
-        panelForm.add(Box.createVerticalStrut(10));
-
-        // 7. Asignación de Computador (Manual vs Automático)
-        comboComputador = new JComboBox<>();
-        comboComputador.addItem("Automático (Balanceo ÁvilaOS)");
-        for (int i = 0; i < cluster.getCantidadComputadores(); i++) {
-            Computador comp = cluster.getComputadores().obtener(i);
-            comboComputador.addItem(comp.getId() + " - " + comp.getNombre());
-        }
-        estilizarCombo(comboComputador);
-        panelForm.add(crearFilaCampo("Asignación de Computador:", comboComputador));
         panelForm.add(Box.createVerticalStrut(10));
 
         // 8. Opciones para I/O Bound
@@ -168,58 +148,10 @@ public class DialogoCrearProceso extends JDialog {
 
         panelForm.add(panelOpcionesIO);
 
-        // 9. Opciones para Productor / Consumidor (Sincronización - Requerimiento 4)
-        panelOpcionesSinc = new JPanel(new GridLayout(3, 2, 8, 8));
-        panelOpcionesSinc.setBackground(COLOR_CARD);
-        panelOpcionesSinc.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(COLOR_BORDE, 1, true),
-                new EmptyBorder(10, 12, 10, 12)
-        ));
-
-        JLabel lblBuf = new JLabel("Buffer Acotado:");
-        lblBuf.setForeground(COLOR_LABEL);
-        lblBuf.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        comboBuffer = new JComboBox<>();
-        int cantBuf = cluster.getGestorSincronizacion().getCantidadBuffers();
-        if (cantBuf == 0) {
-            comboBuffer.addItem(SIN_BUFFERS);
-        } else {
-            for (int b = 0; b < cantBuf; b++) {
-                avilaos.sincronizacion.BufferAcotado buf = cluster.getGestorSincronizacion().getBuffers().obtener(b);
-                if (buf != null) {
-                    comboBuffer.addItem(buf.getId() + " - " + buf.getNombre() + " (@" + buf.getIdComputadorAnfitrion() + ")");
-                }
-            }
-        }
-        estilizarCombo(comboBuffer);
-
-        JLabel lblCiclosItem = new JLabel("Ciclos por Ítem:");
-        lblCiclosItem.setForeground(COLOR_LABEL);
-        lblCiclosItem.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        spinCiclosPorItem = new JSpinner(new SpinnerNumberModel(2, 1, 50, 1));
-        estilizarSpinner(spinCiclosPorItem);
-
-        JLabel lblItemsReq = new JLabel("Ítems Requeridos:");
-        lblItemsReq.setForeground(COLOR_LABEL);
-        lblItemsReq.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        spinItemsRequeridos = new JSpinner(new SpinnerNumberModel(4, 1, 100, 1));
-        estilizarSpinner(spinItemsRequeridos);
-
-        panelOpcionesSinc.add(lblBuf);
-        panelOpcionesSinc.add(comboBuffer);
-        panelOpcionesSinc.add(lblCiclosItem);
-        panelOpcionesSinc.add(spinCiclosPorItem);
-        panelOpcionesSinc.add(lblItemsReq);
-        panelOpcionesSinc.add(spinItemsRequeridos);
-        panelOpcionesSinc.setVisible(false);
-
-        panelForm.add(panelOpcionesSinc);
-
         // Listener para mostrar/ocultar opciones según el tipo
         comboTipo.addActionListener(e -> {
             TipoProceso tipo = (TipoProceso) comboTipo.getSelectedItem();
             panelOpcionesIO.setVisible(tipo == TipoProceso.IO_BOUND);
-            panelOpcionesSinc.setVisible(tipo == TipoProceso.PRODUCTOR || tipo == TipoProceso.CONSUMIDOR);
             revalidate();
             repaint();
         });
@@ -289,79 +221,28 @@ public class DialogoCrearProceso extends JDialog {
             }
         }
 
-        if ((tipo == TipoProceso.PRODUCTOR || tipo == TipoProceso.CONSUMIDOR) && idBufferSeleccionado() == null) {
-            mostrarError("No hay un buffer seleccionado. Cree uno con el botón 'Nuevo Buffer' de la ventana principal.");
+        Computador comp = cluster.getComputadores().obtener(0);
+        long cicloActual = cluster.getRelojGlobal().getCicloActual();
+        // Validar que la memoria no exceda la RAM total del computador
+        if (memoria > comp.getMemoria().getCapacidadTotal()) {
+            mostrarError("La memoria solicitada (" + memoria + " MB) supera la capacidad máxima de la RAM de "
+                    + comp.getNombre() + " (" + comp.getMemoria().getCapacidadTotal() + " MB).\n"
+                    + "Este proceso nunca podrá ser admitido.");
             return;
         }
 
-        // Determinar destino
-        int seleccionComp = comboComputador.getSelectedIndex();
-        long cicloActual = cluster.getRelojGlobal().getCicloActual();
-
-        Proceso proceso;
-        if (seleccionComp == 0) {
-            // Asignación automática por ÁvilaOS (balanceo de carga)
-            proceso = new Proceso(nombre, "Cluster", tipo, prioridad, memoria, deadline, instrucciones);
-            if (tipo == TipoProceso.IO_BOUND) {
-                proceso.getPcb().setCiclosEntreIO((int) spinCiclosEntreIO.getValue());
-                proceso.getPcb().setDuracionBloqueoIO((int) spinDuracionIO.getValue());
-            }
-            configurarSincronizacion(proceso, tipo);
-            cluster.asignarProcesoAutomatico(proceso);
-            ventanaPrincipal.actualizarTodo();
-            JOptionPane.showMessageDialog(this,
-                    "Proceso [" + proceso.getPcb().getId() + "] asignado automáticamente por ÁvilaOS al computador: "
-                    + proceso.getPcb().getComputadorAsignado(),
-                    "Proceso Creado", JOptionPane.INFORMATION_MESSAGE);
-        } else {
-            // Asignación manual
-            Computador comp = cluster.getComputadores().obtener(seleccionComp - 1);
-            if (comp == null) {
-                mostrarError("El computador seleccionado no está disponible.");
-                return;
-            }
-
-            // Validar que la memoria no exceda la RAM total del computador
-            if (memoria > comp.getMemoria().getCapacidadTotal()) {
-                mostrarError("La memoria solicitada (" + memoria + " MB) supera la capacidad máxima de la RAM de "
-                        + comp.getNombre() + " (" + comp.getMemoria().getCapacidadTotal() + " MB).\n"
-                        + "Este proceso nunca podrá ser admitido.");
-                return;
-            }
-
-            proceso = new Proceso(nombre, comp.getId(), tipo, prioridad, memoria, deadline, instrucciones);
-            if (tipo == TipoProceso.IO_BOUND) {
-                proceso.getPcb().setCiclosEntreIO((int) spinCiclosEntreIO.getValue());
-                proceso.getPcb().setDuracionBloqueoIO((int) spinDuracionIO.getValue());
-            }
-            configurarSincronizacion(proceso, tipo);
-            comp.admitirProceso(proceso, cicloActual);
-            ventanaPrincipal.actualizarTodo();
-            JOptionPane.showMessageDialog(this,
-                    "Proceso [" + proceso.getPcb().getId() + "] ingresado a la cola de " + comp.getNombre() + ".",
-                    "Proceso Creado", JOptionPane.INFORMATION_MESSAGE);
+        Proceso proceso = new Proceso(nombre, comp.getId(), tipo, prioridad, memoria, deadline, instrucciones);
+        if (tipo == TipoProceso.IO_BOUND) {
+            proceso.getPcb().setCiclosEntreIO((int) spinCiclosEntreIO.getValue());
+            proceso.getPcb().setDuracionBloqueoIO((int) spinDuracionIO.getValue());
         }
+        comp.admitirProceso(proceso, cicloActual);
+        ventanaPrincipal.actualizarTodo();
+        JOptionPane.showMessageDialog(this,
+                "Proceso [" + proceso.getPcb().getId() + "] ingresado a la cola de " + comp.getNombre() + ".",
+                "Proceso Creado", JOptionPane.INFORMATION_MESSAGE);
 
         dispose();
-    }
-
-    /** ID del buffer elegido en el combo, o {@code null} si no hay un buffer existente seleccionado. */
-    private String idBufferSeleccionado() {
-        String seleccion = (String) comboBuffer.getSelectedItem();
-        if (seleccion == null || SIN_BUFFERS.equals(seleccion) || !seleccion.contains(" - ")) {
-            return null;
-        }
-        String id = seleccion.substring(0, seleccion.indexOf(" - ")).trim();
-        return cluster.getGestorSincronizacion().buscarBuffer(id) != null ? id : null;
-    }
-
-    private void configurarSincronizacion(Proceso proceso, TipoProceso tipo) {
-        if (tipo != TipoProceso.PRODUCTOR && tipo != TipoProceso.CONSUMIDOR) {
-            return;
-        }
-        proceso.getPcb().setIdBuffer(idBufferSeleccionado());
-        proceso.getPcb().setCiclosPorItem((int) spinCiclosPorItem.getValue());
-        proceso.getPcb().setItemsRequeridos((int) spinItemsRequeridos.getValue());
     }
 
     private void mostrarError(String mensaje) {

@@ -142,7 +142,7 @@ src/
 
 ## Requisitos del Entorno
 
-* **Java Development Kit (JDK):** Versión 21 o superior. El proyecto está configurado para compilar con Java 21; para cumplir el enunciado del Proyecto 2 se deberá usar una versión posterior a Java 21.
+* **Java Development Kit (JDK):** JDK 22. En NetBeans, seleccione **Properties → Libraries → Java Platform → JDK 22**, ejecute **Clean and Build** y pulse **F6**.
 * **IDE Oficial:** Apache NetBeans (Requerimiento estricto de cátedra).
 * **Herramienta de Construcción:** Ant (`build.xml` integrado para NetBeans).
 
@@ -207,6 +207,12 @@ La comparación usa el cabezal inicial del JSON del disco. Todas las solicitudes
 parten en cola, en el orden del JSON de procesos, y cada acceso usa el primer bloque
 de su archivo de destino. C-SCAN excluye el salto de retorno del desplazamiento.
 La comparación se ejecuta en discos separados de la simulación principal.
+
+El campo `totalBlocks` del ejemplo cuenta las posiciones de datos. El swap se reserva a continuación en el mismo disco. Al guardar, `physicalBlocks` registra la capacidad completa, incluido el swap, e `initialHead` conserva la posición física del cabezal. Los JSON anteriores sin `physicalBlocks` usan la reserva de swap configurada.
+
+### Demostración de suspensión
+
+En modo administrador cargue `ejemplos/sistema_archivos.json` y `ejemplos/procesos_swap.json`. Inicie el reloj. Los dos procesos requieren 16 unidades cada uno y comparten 16 de RAM. El primer proceso elimina el video del disco simulado para liberar bloques y el segundo crea un archivo. Observe las colas suspendidas y los contadores de suspensión y reactivación. Al terminar, compruebe en la tabla que `/prueba-swap` ocupa tres bloques.
 
 ### Ejecución y carga de escenarios
 

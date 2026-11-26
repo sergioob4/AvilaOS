@@ -279,8 +279,7 @@ public class GestorPersistencia {
 
                             Computador comp = cluster.buscarPorId(id);
                             if (comp == null) {
-                                comp = new Computador(id, nombre, ram);
-                                cluster.agregarComputador(comp);
+                                throw new IOException("Computador desconocido: " + id);
                             }
                             try {
                                 comp.cambiarPolitica(PoliticaPlanificacion.valueOf(politica));
@@ -519,8 +518,7 @@ public class GestorPersistencia {
                 if (!id.isEmpty()) {
                     Computador comp = cluster.buscarPorId(id);
                     if (comp == null && !ramStr.isEmpty()) {
-                        comp = new Computador(id, nombre, Integer.parseInt(ramStr));
-                        cluster.agregarComputador(comp);
+                        throw new IOException("Computador desconocido: " + id);
                     }
                     if (comp != null) {
                         if (!polStr.isEmpty()) {
@@ -635,6 +633,7 @@ public class GestorPersistencia {
                 validarTextoJson(objeto, "nombre", false);
                 validarTextoJson(objeto, "politica", false);
                 String id = extraerValorJson(objeto, "id").toLowerCase(java.util.Locale.ROOT);
+                if (!id.equals("c1")) throw new IOException("Computador desconocido: " + id);
                 if (ids.contiene(id)) throw new IOException("Computador duplicado: " + id);
                 ids.agregar(id);
                 if (ValidadorJson.miembro(objeto, "ramTotalMb") == null)
@@ -910,7 +909,7 @@ public class GestorPersistencia {
         DiscoSimulado.Bloque[] bloquesDisco = vista.bloques();
         int totalBlocks = bloquesDisco.length;
         while (totalBlocks > 0 && bloquesDisco[totalBlocks - 1].swap()) totalBlocks--;
-        int initialHead = Math.min(vista.cabezal(), Math.max(0, totalBlocks - 1));
+        int initialHead = vista.cabezal();
 
         ListaEnlazada<NodoSistemaArchivos> nodos = new ListaEnlazada<>();
         recolectarPreorden(estado.raiz(), nodos);
@@ -919,6 +918,7 @@ public class GestorPersistencia {
         sb.append("{\n");
         sb.append("  \"diskConfig\": {\n");
         sb.append("    \"totalBlocks\": ").append(totalBlocks).append(",\n");
+        sb.append("    \"physicalBlocks\": ").append(bloquesDisco.length).append(",\n");
         sb.append("    \"initialHead\": ").append(initialHead).append("\n");
         sb.append("  },\n");
         sb.append("  \"fileSystem\": [\n");
@@ -1020,8 +1020,11 @@ public class GestorPersistencia {
         if (diskConfigStr == null || !diskConfigStr.startsWith("{")) {
             throw new IOException("Falta el objeto obligatorio 'diskConfig' en el JSON del sistema de archivos.");
         }
-        int totalBlocks = leerEnteroObligatorio(diskConfigStr, "totalBlocks", 1, 500);
-        int initialHead = leerEnteroObligatorio(diskConfigStr, "initialHead", 0, totalBlocks - 1);
+        int maxDatos = ValidadorJson.miembro(diskConfigStr, "physicalBlocks") == null ? 500 : 1000;
+        int totalBlocks = leerEnteroObligatorio(diskConfigStr, "totalBlocks", 1, maxDatos);
+        int totalDisco = leerEnteroOpcional(diskConfigStr, "physicalBlocks", totalBlocks + prevCfg.swap(), totalBlocks, 1000);
+        int swapActual = totalDisco - totalBlocks;
+        int initialHead = leerEnteroObligatorio(diskConfigStr, "initialHead", 0, totalDisco - 1);
 
         String fsArrayStr = ValidadorJson.miembro(json, "fileSystem");
         if (fsArrayStr == null || !fsArrayStr.startsWith("[")) {
@@ -1038,8 +1041,6 @@ public class GestorPersistencia {
         }
 
         // Conservar swap y política previos si ya existían, asegurando capacidad totalBlocks + swap
-        int swapActual = prevCfg.swap();
-        int totalDisco = totalBlocks + swapActual;
         int velocidad = Math.min(prevCfg.velocidad(), totalDisco);
         ConfiguracionDisco nuevaCfg;
         try {
@@ -1118,7 +1119,9 @@ public class GestorPersistencia {
             accesos[i] = new EscenarioDisco.Acceso(archivo.getPrimerBloque(), operacion);
         }
         var disco = computador.getDisco();
-        return EscenarioDisco.comparar(disco.getBloquesDatosTotales(), disco.getConfiguracion().cabezal(), accesos);
+        int limite = disco.getConfiguracion().cabezal() >= disco.getBloquesDatosTotales()
+                ? disco.getConfiguracion().bloques() : disco.getBloquesDatosTotales();
+        return EscenarioDisco.comparar(limite, disco.getConfiguracion().cabezal(), accesos);
     }
 
     private static int[] leerCadenaBloques(String item, int totalBlocks, boolean[] ocupados) throws IOException {
@@ -1235,8 +1238,14 @@ public class GestorPersistencia {
             Permiso permisoCrear = null;
             String nuevoNombre = null;
             if (op == OperacionArchivo.CREAR || op == OperacionArchivo.CREAR_DIRECTORIO) {
-                bloquesCrear = op == OperacionArchivo.CREAR ? leerEnteroOpcional(obj, "blocks", 1, 1, 500)
-                        : leerEnteroOpcional(obj, "blocks", 0, 0, 0);
+                boolean esArchivo = op == OperacionArchivo.CREAR;
+                int minimo = esArchivo ? 1 : 0;
+                int maximo = esArchivo ? 500 : 0;
+                int anterior = leerEnteroOpcional(obj, "blocks", minimo, minimo, maximo);
+                bloquesCrear = leerEnteroOpcional(obj, "fileSizeBlocks", anterior, minimo, maximo);
+                if (ValidadorJson.miembro(obj, "blocks") != null && anterior != bloquesCrear) {
+                    throw new IOException("blocks y fileSizeBlocks difieren en " + name);
+                }
                 String permStr = extraerValorJson(obj, "permissions");
                 permisoCrear = permStr.isBlank() ? Permiso.PUBLICO : parsearPermisoJson(permStr);
             } else if (op == OperacionArchivo.ACTUALIZAR) {

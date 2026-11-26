@@ -42,7 +42,7 @@ public class ConfiguracionInicial {
     public ConfiguracionInicial(int[] ramMb, PoliticaPlanificacion[] politicas, int[] quantums,
                                 int latenciaRedCiclos, long duracionCicloMs, ConfiguracionDisco disco) {
         this.disco = disco;
-        if (ramMb.length < MIN_COMPUTADORES || politicas.length != ramMb.length || quantums.length != ramMb.length) {
+        if (ramMb.length != MAX_COMPUTADORES || politicas.length != ramMb.length || quantums.length != ramMb.length) {
             throw new IllegalArgumentException("Configuración de computadores inconsistente.");
         }
         this.ramMb = ramMb;

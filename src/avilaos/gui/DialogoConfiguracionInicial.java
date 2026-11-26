@@ -46,7 +46,7 @@ public class DialogoConfiguracionInicial extends JDialog {
     private final JComboBox<PoliticaDisco> politicaDisco = new JComboBox<>(PoliticaDisco.values());
     private final JSpinner bloques, swap, cabezal, velocidad;
     private final JSpinner spinCantidad;
-    private final JSpinner spinLatencia;
+    private final int latencia;
     private final JSpinner spinCicloMs;
     private final JPanel panelComputadores;
 
@@ -66,7 +66,7 @@ public class DialogoConfiguracionInicial extends JDialog {
         JLabel titulo = new JLabel("Configuración de la simulación");
         titulo.setFont(new Font("Segoe UI", Font.BOLD, 17));
         titulo.setForeground(COLOR_TITULO);
-        JLabel sub = new JLabel("Defina el clúster antes de iniciar. Podrá crear procesos y buffers y cambiar políticas durante la ejecución.");
+        JLabel sub = new JLabel("Configure el computador, el disco local y la duración del ciclo.");
         sub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         sub.setForeground(COLOR_MUTED);
         JPanel header = new JPanel(new BorderLayout(0, 4));
@@ -80,8 +80,7 @@ public class DialogoConfiguracionInicial extends JDialog {
         // Parámetros globales
         spinCantidad = crearSpinner(inicial.getCantidadComputadores(),
                 ConfiguracionInicial.MIN_COMPUTADORES, ConfiguracionInicial.MAX_COMPUTADORES, 1);
-        spinLatencia = crearSpinner(inicial.getLatenciaRedCiclos(),
-                ConfiguracionInicial.MIN_LATENCIA, ConfiguracionInicial.MAX_LATENCIA, 1);
+        latencia = inicial.getLatenciaRedCiclos();
         spinCicloMs = crearSpinner((int) inicial.getDuracionCicloMs(),
                 ConfiguracionInicial.MIN_CICLO_MS, ConfiguracionInicial.MAX_CICLO_MS, 100);
 
@@ -89,7 +88,6 @@ public class DialogoConfiguracionInicial extends JDialog {
         globales.setOpaque(false);
         agregarFila(globales, "Número de computadores (" + ConfiguracionInicial.MIN_COMPUTADORES
                 + "–" + ConfiguracionInicial.MAX_COMPUTADORES + "):", spinCantidad);
-        agregarFila(globales, "Latencia de red (ciclos):", spinLatencia);
         agregarFila(globales, "Duración del ciclo (ms):", spinCicloMs);
 
         ConfiguracionDisco disco = inicial.getDisco();
@@ -226,7 +224,6 @@ public class DialogoConfiguracionInicial extends JDialog {
     private void aceptar() {
         try {
             int n = (Integer) leer(spinCantidad, "Número de computadores");
-            int latencia = (Integer) leer(spinLatencia, "Latencia de red");
             int cicloMs = (Integer) leer(spinCicloMs, "Duración del ciclo");
 
             int[] ram = new int[n];

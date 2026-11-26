@@ -8,19 +8,13 @@ import avilaos.hardware.RelojGlobal;
 import avilaos.proceso.Proceso;
 import avilaos.sincronizacion.GestorSincronizacion;
 
-/**
- * Representa el clúster distribuido de computadores en ÁvilaOS.
- *
- * <p>Coordina el conjunto de máquinas (mínimo 2 según el Requerimiento 1),
- * el reloj global de sincronización y las políticas de distribución de procesos.</p>
- */
+/** Coordina el computador local, su reloj y el registro de eventos de ÁvilaOS. */
 public class ClusterDistribuido {
 
     /** Reloj global que sincroniza a todos los nodos del clúster. */
     private final RelojGlobal relojGlobal;
 
-    /** Lista enlazada propia de computadores que conforman el clúster. */
-    private final ListaEnlazada<Computador> computadores;
+    private final Computador computador;
 
     /** Latencia de red global (en ciclos de reloj) para accesos remotos a buffers. */
     private int latenciaRedCiclos;
@@ -34,7 +28,7 @@ public class ClusterDistribuido {
     /**
      * Construye un clúster distribuido con una cantidad dada de computadores.
      *
-     * @param cantidadComputadores cantidad de computadores a simular (mínimo 2)
+     * @param cantidadComputadores cantidad de computadores a simular (uno)
      * @param ramPorDefectoMb memoria RAM en MB para cada computador
      */
     public ClusterDistribuido(int cantidadComputadores, int ramPorDefectoMb) {
@@ -42,17 +36,14 @@ public class ClusterDistribuido {
     }
 
     private static int[] ramUniforme(int cantidad, int ramMb) {
-        int[] rams = new int[Math.max(0, cantidad)];
-        for (int i = 0; i < rams.length; i++) {
-            rams[i] = ramMb;
-        }
-        return rams;
+        if (cantidad != 1) throw new IllegalArgumentException("ÁvilaOS requiere un solo computador.");
+        return new int[]{ramMb};
     }
 
     /**
      * Construye un clúster donde cada computador puede tener una RAM distinta.
      *
-     * @param ramPorComputadorMb RAM en MB de cada computador (longitud = cantidad, mínimo 2)
+     * @param ramPorComputadorMb RAM en MB de cada computador (longitud = cantidad, uno)
      */
     public ClusterDistribuido(int[] ramPorComputadorMb) {
         this(ramPorComputadorMb, ConfiguracionDisco.PREDETERMINADA);
@@ -60,36 +51,19 @@ public class ClusterDistribuido {
 
     public ClusterDistribuido(int[] ramPorComputadorMb, ConfiguracionDisco configDisco) {
         int cantidadComputadores = ramPorComputadorMb.length;
-        if (cantidadComputadores < 1) {
-            throw new IllegalArgumentException("El sistema debe simular como mínimo un computador.");
+        if (cantidadComputadores != 1) {
+            throw new IllegalArgumentException("El sistema debe simular exactamente un computador.");
         }
 
         this.relojGlobal = new RelojGlobal();
-        this.computadores = new ListaEnlazada<>();
         this.eventos = new Cola<>();
         this.latenciaRedCiclos = 2; // Valor por defecto
         this.gestorSincronizacion = new GestorSincronizacion(this);
         this.relojGlobal.registrarComponente(this.gestorSincronizacion);
 
-        for (int i = 1; i <= cantidadComputadores; i++) {
-            Computador comp = new Computador("C" + i, "Computador " + i, ramPorComputadorMb[i - 1], configDisco);
-            comp.getSo().setGestorSincronizacion(this.gestorSincronizacion);
-            computadores.agregar(comp);
-            relojGlobal.registrarComponente(comp);
-        }
-    }
-
-    /**
-     * Agrega un nuevo computador al clúster de forma dinámica.
-     *
-     * @param computador instancia de computador a incorporar
-     */
-    public void agregarComputador(Computador computador) {
-        if (computador != null && !computadores.contiene(computador)) {
-            computador.getSo().setGestorSincronizacion(this.gestorSincronizacion);
-            computadores.agregar(computador);
-            relojGlobal.registrarComponente(computador);
-        }
+        computador = new Computador("C1", "Computador 1", ramPorComputadorMb[0], configDisco);
+        computador.getSo().setGestorSincronizacion(gestorSincronizacion);
+        relojGlobal.registrarComponente(computador);
     }
 
     /**
@@ -99,42 +73,11 @@ public class ClusterDistribuido {
      * @return el computador encontrado, o {@code null} si no existe
      */
     public Computador buscarPorId(String id) {
-        int total = computadores.obtenerTamano();
-        for (int i = 0; i < total; i++) {
-            Computador c = computadores.obtener(i);
-            if (c != null && c.getId().equalsIgnoreCase(id)) {
-                return c;
-            }
-        }
-        return null;
+        return computador.getId().equalsIgnoreCase(id) ? computador : null;
     }
 
-    /**
-     * Asigna un proceso de manera automática al computador con menor carga (balanceo de carga básico).
-     *
-     * @param proceso proceso a distribuir
-     */
     public void asignarProcesoAutomatico(Proceso proceso) {
-        if (proceso == null || computadores.estaVacia()) {
-            return;
-        }
-
-        Computador mejorCandidato = computadores.obtener(0);
-        int menorCarga = mejorCandidato.getSo().getColaListos().obtenerTamano()
-                + mejorCandidato.getSo().getColaNuevos().obtenerTamano();
-
-        int total = computadores.obtenerTamano();
-        for (int i = 1; i < total; i++) {
-            Computador actual = computadores.obtener(i);
-            int cargaActual = actual.getSo().getColaListos().obtenerTamano()
-                    + actual.getSo().getColaNuevos().obtenerTamano();
-            if (cargaActual < menorCarga) {
-                mejorCandidato = actual;
-                menorCarga = cargaActual;
-            }
-        }
-
-        mejorCandidato.admitirProceso(proceso, relojGlobal.getCicloActual());
+        if (proceso != null) computador.admitirProceso(proceso, relojGlobal.getCicloActual());
     }
 
     public RelojGlobal getRelojGlobal() {
@@ -142,11 +85,13 @@ public class ClusterDistribuido {
     }
 
     public ListaEnlazada<Computador> getComputadores() {
-        return computadores;
+        var copia = new ListaEnlazada<Computador>();
+        copia.agregar(computador);
+        return copia;
     }
 
     public int getCantidadComputadores() {
-        return computadores.obtenerTamano();
+        return 1;
     }
 
     public int getLatenciaRedCiclos() {

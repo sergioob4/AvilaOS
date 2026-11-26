@@ -4,8 +4,6 @@ import avilaos.persistencia.GestorPersistencia;
 
 import avilaos.enums.ModoUsuario;
 import avilaos.enums.MotivoBloqueo;
-import avilaos.enums.PoliticaPlanificacion;
-import avilaos.enums.TipoProceso;
 import avilaos.estructuras.ListaEnlazada;
 import avilaos.hardware.RelojGlobal;
 import avilaos.interfaces.IComponenteReloj;
@@ -14,8 +12,6 @@ import avilaos.proceso.Proceso;
 import avilaos.sistema.ClusterDistribuido;
 import avilaos.sistema.Computador;
 import avilaos.sistema.SistemaOperativo;
-import avilaos.sincronizacion.BufferAcotado;
-import avilaos.sincronizacion.ElementoBuffer;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -83,12 +79,9 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
     private JTextPane logEventos;
     private JTextPane logCiclos;
     private JTextPane logPCB;
-    private JTextPane logBuffers;
     private StyledDocument docEventos;
     private StyledDocument docCiclos;
     private StyledDocument docPCB;
-    private StyledDocument docBuffers;
-    private JLabel lblInfoCluster;
 
     // Paleta visual Dark Theme con alto contraste
     private static final Color COLOR_BG_VENTANA = new Color(21, 25, 32);
@@ -114,7 +107,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      * @param cluster el clúster distribuido a monitorear
      */
     public VentanaPrincipal(ClusterDistribuido cluster) {
-        super("ÁvilaOS — Monitor de Clúster Distribuido (Sistemas Operativos)");
+        super("ÁvilaOS — Monitor del computador (Sistemas Operativos)");
         this.cluster = cluster;
         this.reloj = cluster.getRelojGlobal();
         this.listaPaneles = new ListaEnlazada<>();
@@ -389,8 +382,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
                 new EmptyBorder(8, 18, 8, 18)
         ));
 
-        lblInfoCluster = new JLabel(String.format("Clúster: %d Computadores Simulados | Latencia Red: %d ciclos | Monitoreo Activo (ÁvilaOS)",
-                cluster.getCantidadComputadores(), cluster.getLatenciaRedCiclos()));
+        JLabel lblInfoCluster = new JLabel("Computador 1 · Disco local");
         lblInfoCluster.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblInfoCluster.setForeground(COLOR_TEXTO_MUTED);
 
@@ -425,7 +417,7 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         logEventos = crearTextPaneLog();
         docEventos = logEventos.getStyledDocument();
         JScrollPane scrollEventos = crearScrollLog(logEventos);
-        tabbedLogs.addTab("Eventos del Clúster", scrollEventos);
+        tabbedLogs.addTab("Eventos del sistema", scrollEventos);
 
         // Pestaña 2: Ciclos
         logCiclos = crearTextPaneLog();
@@ -438,12 +430,6 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         docPCB = logPCB.getStyledDocument();
         JScrollPane scrollPCB = crearScrollLog(logPCB);
         tabbedLogs.addTab("Snapshots PCB", scrollPCB);
-
-        // Pestaña 4: Buffers y Sincronización (Requerimiento 4)
-        logBuffers = crearTextPaneLog();
-        docBuffers = logBuffers.getStyledDocument();
-        JScrollPane scrollBuffers = crearScrollLog(logBuffers);
-        tabbedLogs.addTab("Buffers y Semáforos", scrollBuffers);
 
         Computador primerComp = cluster.getComputadores().obtener(0);
         panelDisco = new PanelDisco(primerComp.getDisco());
@@ -913,52 +899,9 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
      */
     public void inyectarCargaPrueba() {
         exigirModoAdministrador();
-        if (cluster.getCantidadComputadores() == 1) {
-            boolean cargado = avilaos.sistema.EscenarioDisco.cargar(cluster.getComputadores().obtener(0));
-            agregarLogEvento(cargado ? "Ejemplo de disco cargado. Avance el reloj para observar la lectura."
-                    : "La demostración requiere un disco vacío y las rutas de ejemplo disponibles.", COLOR_MORADO);
-            actualizarTodo();
-            return;
-        }
-
-        Computador c1 = cluster.getComputadores().obtener(0);
-        Computador c2 = cluster.getComputadores().obtener(1);
-
-        c1.cambiarPolitica(PoliticaPlanificacion.ROUND_ROBIN);
-        c1.cambiarQuantum(2);
-
-        c2.cambiarPolitica(PoliticaPlanificacion.PRIORIDADES_APROPIATIVAS);
-
-        // Crear Buffer Acotado si aún no existe en el gestor de sincronización
-        if (cluster.getGestorSincronizacion().getCantidadBuffers() == 0) {
-            cluster.getGestorSincronizacion().crearBuffer("B1", "Buffer Central", c1.getId(), 3, 256);
-        }
-
-        // Procesos para C1 (Cálculo Matricial y Productor Local)
-        Proceso p1 = new Proceso("Cálculo Matricial", c1.getId(), TipoProceso.CPU_BOUND, 2, 512, 18, 6);
-        Proceso p2 = new Proceso("Productor Local", c1.getId(), TipoProceso.PRODUCTOR, 3, 256, 35, 8);
-        p2.getPcb().setIdBuffer("B1");
-        p2.getPcb().setCiclosPorItem(2);
-        p2.getPcb().setItemsRequeridos(4);
-
-        c1.admitirProceso(p1, reloj.getCicloActual());
-        c1.admitirProceso(p2, reloj.getCicloActual());
-
-        // Procesos para C2 (Indexador Web, Consumidor Remoto y Lector de Disco I/O Bound)
-        Proceso p3 = new Proceso("Indexador Web", c2.getId(), TipoProceso.CPU_BOUND, 1, 512, 22, 7);
-        Proceso p4 = new Proceso("Consumidor Remoto", c2.getId(), TipoProceso.CONSUMIDOR, 4, 256, 35, 8);
-        p4.getPcb().setIdBuffer("B1");
-        p4.getPcb().setCiclosPorItem(2);
-        p4.getPcb().setItemsRequeridos(4);
-
-        Proceso p5 = new Proceso("Lector de Disco", c2.getId(), TipoProceso.IO_BOUND, 2, 256, 20, 6);
-        p5.getPcb().setCiclosEntreIO(3);
-        p5.getPcb().setDuracionBloqueoIO(2);
-
-        c2.admitirProceso(p3, reloj.getCicloActual());
-        c2.admitirProceso(p4, reloj.getCicloActual());
-        c2.admitirProceso(p5, reloj.getCicloActual());
-
+        boolean cargado = avilaos.sistema.EscenarioDisco.cargar(cluster.getComputadores().obtener(0));
+        agregarLogEvento(cargado ? "Ejemplo de disco cargado. Avance el reloj para observar la lectura."
+                : "La demostración requiere un disco vacío y las rutas de ejemplo disponibles.", COLOR_MORADO);
         actualizarTodo();
     }
 
@@ -992,27 +935,6 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             }
         }
 
-        actualizarTabBuffers();
-
-        if (lblInfoCluster != null) {
-            StringBuilder info = new StringBuilder();
-            info.append(String.format("Clúster: %d Computadores Simulados | Latencia Red: %d ciclos",
-                    cluster.getCantidadComputadores(), cluster.getLatenciaRedCiclos()));
-            int cantBuffers = cluster.getGestorSincronizacion().getCantidadBuffers();
-            if (cantBuffers > 0) {
-                info.append(" | Buffers: ");
-                for (int i = 0; i < cantBuffers; i++) {
-                    BufferAcotado b = cluster.getGestorSincronizacion().getBuffers().obtener(i);
-                    if (b != null) {
-                        info.append(String.format("[%s @ %s: %d/%d (Ocup: %.1f)] ",
-                                b.getId(), b.getComputadorAnfitrion(), b.getCantidadElementos(), b.getCapacidad(), b.calcularOcupacionPromedio()));
-                    }
-                }
-            }
-            info.append("| Monitoreo Activo (ÁvilaOS)");
-            lblInfoCluster.setText(info.toString());
-        }
-
         drenarEventosSistema();
     }
 
@@ -1042,67 +964,6 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
         }
     }
 
-    private void actualizarTabBuffers() {
-        if (docBuffers == null) {
-            return;
-        }
-        try {
-            docBuffers.remove(0, docBuffers.getLength());
-            int total = cluster.getGestorSincronizacion().getCantidadBuffers();
-            if (total == 0) {
-                docBuffers.insertString(0, "No hay buffers acotados configurados en el clúster.\n(Use 'Carga Demo' para inicializar el buffer B1 o defínalo en el sistema).", null);
-                return;
-            }
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("========================================================================================\n");
-            sb.append("                 ESTADO DE BUFFERS ACOTADOS Y SEMÁFOROS (REQUERIMIENTO 4)               \n");
-            sb.append("========================================================================================\n\n");
-
-            for (int i = 0; i < total; i++) {
-                BufferAcotado b = cluster.getGestorSincronizacion().getBuffers().obtener(i);
-                if (b == null) continue;
-
-                sb.append(String.format("📌 BUFFER: %s - \"%s\"\n", b.getId(), b.getNombre()));
-                sb.append(String.format("   • Computador Anfitrión: %s (Memoria RAM reservada: %d MB)\n", b.getComputadorAnfitrion(), b.getMemoriaReservadaMb()));
-                sb.append(String.format("   • Capacidad: %d elementos | Ocupación Actual: %d / %d (%.1f%%)\n",
-                        b.getCapacidad(), b.getCantidadElementos(), b.getCapacidad(),
-                        ((double) b.getCantidadElementos() / b.getCapacidad()) * 100.0));
-                sb.append(String.format("   • Ocupación Promedio: %.2f elementos\n", b.calcularOcupacionPromedio()));
-                sb.append(String.format("   • Total Producidos: %d | Total Consumidos: %d\n", b.getTotalProducidos(), b.getTotalConsumidos()));
-
-                sb.append("   • Semáforos de Dijkstra:\n");
-                sb.append(String.format("     - Mutex:     Valor=%d | Procesos en espera=%d (%s)\n",
-                        b.getSemaforoMutex().getValor(), b.getSemaforoMutex().getCantidadEnEspera(),
-                        b.getSemaforoMutex().getColaEspera()));
-                sb.append(String.format("     - Espacios:  Valor=%d | Productores bloqueados=%d (%s)\n",
-                        b.getSemaforoEspacios().getValor(), b.getSemaforoEspacios().getCantidadEnEspera(),
-                        b.getSemaforoEspacios().getColaEspera()));
-                sb.append(String.format("     - Elementos: Valor=%d | Consumidores bloqueados=%d (%s)\n",
-                        b.getSemaforoElementos().getValor(), b.getSemaforoElementos().getCantidadEnEspera(),
-                        b.getSemaforoElementos().getColaEspera()));
-
-                sb.append("   • Elementos Residentes en Buffer:\n");
-                if (b.getCantidadElementos() == 0) {
-                    sb.append("     (Buffer vacío)\n");
-                } else {
-                    for (int k = 0; k < b.getCantidadElementos(); k++) {
-                        ElementoBuffer item = b.getElementos().obtener(k);
-                        if (item != null) {
-                            sb.append(String.format("     [%d] %s (Generado por %s en %s @ T=%d)\n",
-                                    k + 1, item.getContenido(), item.getIdProcesoProductor(),
-                                    item.getIdComputadorOrigen(), item.getCicloProduccion()));
-                        }
-                    }
-                }
-                sb.append("----------------------------------------------------------------------------------------\n\n");
-            }
-
-            docBuffers.insertString(0, sb.toString(), null);
-        } catch (BadLocationException ignored) {
-        }
-    }
-
     // =========================================================================
     // Registro automático en los Logs por cada ciclo
     // =========================================================================
@@ -1129,18 +990,6 @@ public class VentanaPrincipal extends JFrame implements IComponenteReloj {
             sb.append(" | Listos:").append(so.getColaListos().obtenerTamano())
               .append(" Bloq:").append(so.getColaBloqueados().obtenerTamano())
               .append(" Term:").append(so.getColaTerminados().obtenerTamano());
-        }
-
-        int cantBuffers = cluster.getGestorSincronizacion().getCantidadBuffers();
-        if (cantBuffers > 0) {
-            sb.append("  |  Buffers: ");
-            for (int b = 0; b < cantBuffers; b++) {
-                BufferAcotado buf = cluster.getGestorSincronizacion().getBuffers().obtener(b);
-                if (buf != null) {
-                    sb.append("[").append(buf.getId()).append(": ").append(buf.getCantidadElementos())
-                      .append("/").append(buf.getCapacidad()).append("] ");
-                }
-            }
         }
 
         agregarLogCiclo(sb.toString(), COLOR_TEXTO_TITULO);

@@ -1,0 +1,31 @@
+{
+  "globalConfig": {
+    "cycleDurationMs": 300,
+    "swapSizeBlocks": 100,
+    "initialDiskPolicy": "FIFO"
+  },
+  "computer": {
+    "ramCapacity": 16,
+    "policy": "FCFS",
+    "quantum": 0
+  },
+  "processes": [
+    {
+      "name": "LiberarVideo",
+      "memory": 16,
+      "deadline": 3000,
+      "instructions": 2,
+      "targetPath": "/usuarios/video.mp4",
+      "operation": "DELETE"
+    },
+    {
+      "name": "Creacion",
+      "memory": 16,
+      "deadline": 3000,
+      "instructions": 2,
+      "targetPath": "/prueba-swap",
+      "operation": "CREATE",
+      "fileSizeBlocks": 3
+    }
+  ]
+}
