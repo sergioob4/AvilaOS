@@ -94,10 +94,7 @@ public class SistemaArchivos {
             if (!(nodoExistente(ruta) instanceof Archivo archivo)) {
                 throw new IllegalArgumentException(ruta + " no es un archivo.");
             }
-            if (!modo.esAdministrador() && archivo.getPermiso() == Permiso.PRIVADO
-                    && !archivo.getDueno().equals(usuario.trim())) {
-                throw new SecurityException("Permiso de lectura denegado para " + ruta + ".");
-            }
+            validarLectura(archivo, usuario, modo);
             int inicio = archivo.getPrimerBloque();
             if (inicio == Archivo.SIN_BLOQUES) {
                 throw new IllegalStateException("El archivo todavía no tiene bloques asignados.");
@@ -242,7 +239,7 @@ public class SistemaArchivos {
         try {
             Directorio padre = directorioExistente(rutaPadre);
             Archivo archivo = new Archivo(nombre, dueno, permiso, tamanoBloques, procesoCreador);
-            validarCreacion(padre, archivo, usuario, modo);
+            validarCreacion(padre, archivo.getDueno(), usuario, modo);
             padre.agregarHijo(archivo);
             try {
                 archivo.setPrimerBloque(disco.asignarArchivo(archivo.getRuta(), tamanoBloques));
@@ -338,9 +335,42 @@ public class SistemaArchivos {
         archivo.setPrimerBloque(Archivo.SIN_BLOQUES);
     }
 
-    private static void validarCreacion(Directorio padre, Archivo archivo, String usuario, ModoUsuario modo) {
+    /** Verifica la sesión antes de admitir un proceso, sin reservar bloques ni encolar E/S. */
+    public void validarPermiso(PeticionArchivo peticion) {
+        if (peticion.modo().esAdministrador()) return;
+        adquirir();
+        try {
+            switch (peticion.operacion()) {
+                case LEER -> {
+                    if (!(nodoExistente(peticion.ruta()) instanceof Archivo archivo)) {
+                        throw new IllegalArgumentException("Seleccione un archivo para leer.");
+                    }
+                    validarLectura(archivo, peticion.usuario(), peticion.modo());
+                }
+                case CREAR -> validarCreacion(padreDe(peticion.ruta()), peticion.usuario(),
+                        peticion.usuario(), peticion.modo());
+                case ACTUALIZAR, ELIMINAR -> exigirAdministrador(peticion.modo());
+            }
+        } finally {
+            liberar();
+        }
+    }
+
+    private Directorio padreDe(String ruta) {
+        int separador = ruta.lastIndexOf('/');
+        return directorioExistente(separador == 0 ? "/" : ruta.substring(0, separador));
+    }
+
+    private static void validarLectura(Archivo archivo, String usuario, ModoUsuario modo) {
+        if (!modo.esAdministrador() && archivo.getPermiso() == Permiso.PRIVADO
+                && !archivo.getDueno().equals(usuario.trim())) {
+            throw new SecurityException("El archivo es privado y pertenece a otro usuario.");
+        }
+    }
+
+    private static void validarCreacion(Directorio padre, String dueno, String usuario, ModoUsuario modo) {
         if (!modo.esAdministrador() && (!padre.getDueno().equals(usuario.trim())
-                || !archivo.getDueno().equals(usuario.trim()))) {
+                || !dueno.equals(usuario.trim()))) {
             throw new SecurityException("Solo puede crear archivos propios dentro de sus directorios.");
         }
     }
@@ -384,10 +414,10 @@ public class SistemaArchivos {
     private Archivo reservarCreacion(PeticionArchivo peticion, String proceso) {
         String ruta = peticion.ruta();
         int separador = ruta.lastIndexOf('/');
-        Directorio padre = directorioExistente(separador == 0 ? "/" : ruta.substring(0, separador));
+        Directorio padre = padreDe(ruta);
         Archivo archivo = new Archivo(ruta.substring(separador + 1), peticion.usuario(), peticion.permiso(),
                 peticion.tamanoBloques(), proceso);
-        validarCreacion(padre, archivo, peticion.usuario(), peticion.modo());
+        validarCreacion(padre, archivo.getDueno(), peticion.usuario(), peticion.modo());
         if (padre.buscarHijo(archivo.getNombre()) != null) {
             throw new IllegalStateException("Ya existe un elemento en " + ruta);
         }
